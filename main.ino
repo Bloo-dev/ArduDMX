@@ -127,8 +127,8 @@ void readAudio(int *bands, uint8_t sampleAmount, uint16_t sampleDelay, uint8_t s
 */
 void transformResponseTables(uint32_t *colorResponseTable, uint32_t *audioResponseTable, uint16_t fixtureAmount)
 {
-    // TODO find a way to transform the arrays in-place or return new multi-dim arrays
-    // Or change multi-dim arrays into single dim arrays by providing RGB in hex/binary and frequency response in hex/binary
+    // TODO find a way to transform the arrays (switch indices and/or remove some entries temporarily)
+    // Figure out whether to return new, modified arrays or whether to modify in-place (would require a copy of the input arrays to be made before input)
 }
 
 /*
@@ -165,7 +165,7 @@ void setFixtureBrightness(DMXFixture &targetFixture, int *audioAmplitudes, uint3
     uint8_t brightness = 0;
     for (uint8_t band = 0; band < 7; band++)
     {
-        if (((audioResponse & (0xF * (band + 1))) >> (band * 4)) >= 0) // TODO allow this to differnetiate between the 16 possible values for each response
+        if (((audioResponse & (0xF * (band + 1))) >> (band * 4)) >= 0) // TODO allow this to differnetiate between the 16 possible values for each response, also check whether the bit-shift math here checks out
         {
             brightness = max(audioAmplitudes[band], brightness);
         }
