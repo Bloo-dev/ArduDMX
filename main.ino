@@ -7,14 +7,13 @@
 const uint8_t maxBrightness = 217;                                                    // 85% max brightness to increase LED lifetime
 DMXFixture fixtures[] = {DMXFixture(1, maxBrightness), DMXFixture(7, maxBrightness)}; // configured fixtures and their start channels.
 const uint32_t fixtureColors[] = {0xFF0000, 0x0000FF};                                // colors for the configured fixtures to start out with, in order, stored in hex. Should be normalized to avoid differing fixture brightness values from fixture to fixture.
-const uint32_t fixtureFrequencies[] = {0xFF00000, 0x000FFF0};                         // frequency responses of the fixtures stored in hex. Each digit corresponds to a frequency band, meaning each frequency band can have a response between 15 (max) and 0 (min).
+const uint32_t fixtureFrequencies[] = {0x0000FFF, 0xFFF0000};                         // frequency responses of the fixtures stored in hex. Each digit corresponds to a frequency band, meaning each frequency band can have a response between 15 (max) and 0 (min). Leftmost digits are highest frequencies.
 const uint16_t fixtureAmount = sizeof(fixtures) / sizeof(DMXFixture);
 // MSGEQ7 Signal Data
 const uint8_t samplesPerRun = 16;       // number of consecutive samples to take whenever the audio is sampled (these are then averaged). Higher values inhibit random noise spikes.
 const uint16_t delayBetweenSamples = 1; // time in ms to wait between samples in a consecutive sample run. High values will decrease temporal resolution drastically.
 // const float signalAmplification = 6.0;  // amplification of the signal before it is sent to the light fixtures. Amplifies the signal (0..1024) by this factor (0.0..10.0). This happens AFTER the noise cutoff, meaning any signals lower than noiseCutoff won't be amplified (stay 0).
 //  =============================
-// Settings for basement: noiseLevel=200, signalAmplification=6.0
 
 // ===== GLOBAL VARIABLES ======
 // DMX Hardware
@@ -22,12 +21,13 @@ DMX_Master dmxMaster(fixtures[0].channelAmount *fixtureAmount, 2);
 // FFT Hardware
 Analyzer MSGEQ7 = Analyzer(6, 7, 0);
 uint16_t frequencyAmplitudes[7]; // stores data from MSGEQ7 chip
-uint16_t noiseLevel = 200;         // lower bound for noise, managed automatically
 // Auto Gain
 uint16_t averageAmplitudeHistory[64]; // stores the history of the cross-band average amplitude
 uint8_t currentHistoryEntry = 0;
-float amplificationFactor = 6.0;
+float amplificationFactor = 4.0; // TODO mange this automatically
+uint16_t noiseLevel = 0; // lower bound for noise, managed automatically
 // =============================
+// Settings for basement: noiseLevel=200, signalAmplification=6.0
 
 void setup()
 {
@@ -56,13 +56,16 @@ void loop()
 {
     // get FFT data from MSGEQ7 chip
     sampleMSGEQ7(samplesPerRun, delayBetweenSamples, frequencyAmplitudes);
-    transformAudioSignal(noiseLevel, amplificationFactor, frequencyAmplitudes);
 
-    // remember amplitude history for auto-gain
-    //averageAmplitudeHistory[currentHistoryEntry++] = getAverage(frequencyAmplitudes, 7, 0);
-    //if (currentHistoryEntry > 63)
-    //    currentHistoryEntry = 0;
-    //amplificationFactor = autoGain(getAverage(averageAmplitudeHistory, 64, 0), 84);
+    // store signal history (without background noise)
+    averageAmplitudeHistory[currentHistoryEntry++] = max((int32_t)getAverage(frequencyAmplitudes, 7, 0) - noiseLevel, 0);
+    if (currentHistoryEntry > 63)
+        currentHistoryEntry = 0;
+    uint16_t signalMean = getAverage(averageAmplitudeHistory, 64, 0);
+    //amplificationFactor = autoGain(signalMean, 84);
+
+    // transform audio signal to light signal
+    transformAudioSignal(max(noiseLevel, signalMean), amplificationFactor, frequencyAmplitudes); // max(noiseLevel, signalMean) pulls signal down to bottom of range [0..255] by essentially subtracting the average of the signal, leaving mostly peaks (useful for amplification).
 
     // Cycle Fixtures
     uint32_t transformedColorResponseTable[fixtureAmount];
@@ -80,6 +83,7 @@ void loop()
     }
 }
 
+// TODO
 float autoGain(uint16_t currentMean, uint16_t targetMean)
 {
 
@@ -158,7 +162,7 @@ void sampleMSGEQ7(int8_t sampleAmount, uint16_t sampleDelay, int *targetArray)
 }
 
 /**
-    @brief Transforms the response tables to cycle colors or change frequency response.
+    @brief Transforms the response tables to cycle colors or change frequency response. TODO
 */
 void transformResponseTables(uint32_t *constColorResponseTable, uint32_t *shuffledColorResponseTable, uint32_t *constAudioResponseTable, uint32_t *shuffledAudioResponseTable, uint16_t fixtureAmount)
 {
@@ -200,7 +204,7 @@ void setFixtureBrightness(DMXFixture &targetFixture, int *audioAmplitudes, uint3
     uint8_t brightness = 0;
     for (uint8_t band = 0; band < 7; band++)
     {
-        if (((audioResponse & (0xF * 10 ^ band)) >> (band * 4)) >= 0) // TODO allow this to differnetiate between the 16 possible values for each response, also check whether the bit-shift math here checks out
+        if (((audioResponse & ((uint32_t)0xF << (band * 4))) >> (band * 4)) == 0xF) // TODO allow this to differnetiate between the 16 possible values for each response, also check whether the bit-shift math here checks out
         {
             brightness = max(audioAmplitudes[band], brightness);
         }
