@@ -13,9 +13,10 @@ public:
     static const uint8_t localStrobeChannel = 6;
     static const uint8_t channelAmount = 6;
     DMXFixture(uint16_t startChannel, uint8_t dimmerDefaultValue);
-    void setRGB(uint8_t redValue, uint8_t greenValue, uint8_t blueValue);
+    void setRGB(uint32_t hexColor);
     void setWhite(uint8_t whiteValue);
     void setDimmer(uint8_t dimmerValue);
+    void setRGBDimmer(uint8_t dimmerValue);
     void setStrobe(uint8_t strobeValue);
     void reset();
     void display(DMX_Master &dmxController);
@@ -30,6 +31,7 @@ private:
     uint16_t _strobeChannel;
     uint8_t _dimmerDefaultValue;
     uint8_t _dimmerValue;
+    uint8_t _rgbDimmerValue;
     uint8_t _redValue;
     uint8_t _greenValue;
     uint8_t _blueValue;

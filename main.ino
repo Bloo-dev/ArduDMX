@@ -6,8 +6,8 @@
 // Light Fixture Data
 const uint8_t maxBrightness = 217;                                                    // 85% max brightness to increase LED lifetime
 DMXFixture fixtures[] = {DMXFixture(1, maxBrightness), DMXFixture(7, maxBrightness)}; // configured fixtures and their start channels.
-const uint8_t fixtureColors[][3] = {{255, 0, 0}, {0, 0, 255}};                        // colors for the configured fixtures to start out with, in order. Should be normalized to 255 for best color mixing
-const bool fixtureFrequencies[][7] = {{1, 1, 0, 0, 0, 0, 0}, {0, 0, 0, 1, 1, 1, 0}};  // frequency responses of the fixtures.
+const uint32_t fixtureColors[] = {0xFF0000, 0x0000FF};                                // colors for the configured fixtures to start out with, in order, stored in hex. Should be normalized to avoid differing fixture brightness values from fixture to fixture.
+const uint32_t fixtureFrequencies[] = {0xFF00000, 0x000FFF0};                         // frequency responses of the fixtures stored in hex. Each digit corresponds to a frequency band, meaning each frequency band can have a response between 15 (max) and 0 (min).
 const uint16_t fixtureAmount = sizeof(fixtures) / sizeof(DMXFixture);
 // MSGEQ7 Signal Data
 const uint8_t noiseCutoff = 200;        // lower bound for what is considered noise. 0..1024. Higher values lead to flickery behaviour, but push silent parts of the signal to zero. Low values will cause random noise to create a signal without any actual audio signal.
@@ -125,7 +125,7 @@ void readAudio(int *bands, uint8_t sampleAmount, uint16_t sampleDelay, uint8_t s
 /*
     Transforms the response tables to cycle colors or change frequency response.
 */
-void transformResponseTables(uint8_t colorResponseTable[][3], bool audioResponseTable[][7], uint16_t fixtureAmount)
+void transformResponseTables(uint32_t *colorResponseTable, uint32_t *audioResponseTable, uint16_t fixtureAmount)
 {
     // TODO find a way to transform the arrays in-place or return new multi-dim arrays
     // Or change multi-dim arrays into single dim arrays by providing RGB in hex/binary and frequency response in hex/binary
@@ -135,10 +135,10 @@ void transformResponseTables(uint8_t colorResponseTable[][3], bool audioResponse
     Sets the color of a single fixture according to the supplied color response values.
 
     @param &targetFixture Fixture to be adjusted.
-    @param *audioAmplitudes 7 element int array of amplitudes per frequency band.
-    @param *colorResponse 3 element uint8_t array that represents the color to be displayed by this fixture.
+    @param *audioAmplitudes 7 element uint32_t array of amplitudes per frequency band.
+    @param colorResponse [..0xFFFFFF] hex value that represents the color to be displayed by this fixture.
 */
-void setFixtureColor(DMXFixture &targetFixture, int *audioAmplitudes, uint8_t *colorResponse)
+void setFixtureColor(DMXFixture &targetFixture, int *audioAmplitudes, uint32_t colorResponse)
 {
     if (audioAmplitudes[1] > 0 || audioAmplitudes[2] > 0 || audioAmplitudes[3] > 0)
     {
@@ -157,15 +157,15 @@ void setFixtureColor(DMXFixture &targetFixture, int *audioAmplitudes, uint8_t *c
     Sets the brightness of a single fixture according to the supplied audio response values.
 
     @param &targetFixture Fixture to be adjusted.
-    @param *audioAmplitudes 7 element int array of amplitudes per frequency band.
-    @param *audioResponse 7 element bool array of frequences this fixture should respond to.
+    @param *audioAmplitudes 7 element uint32_t array of amplitudes per frequency band.
+    @param audioResponse [..0xFFFFFFF] hex value that represents the frequencies this fixture should respond to.
 */
-void setFixtureBrightness(DMXFixture &targetFixture, int *audioAmplitudes, bool *audioResponse)
+void setFixtureBrightness(DMXFixture &targetFixture, int *audioAmplitudes, uint32_t audioResponse)
 {
     uint8_t brightness = 0;
     for (uint8_t band = 0; band < 7; band++)
     {
-        if (audioResponse[band] == true)
+        if (((audioResponse & (0xF * (band + 1))) >> (band * 4)) >= 0) // TODO allow this to differnetiate between the 16 possible values for each response
         {
             brightness = max(audioAmplitudes[band], brightness);
         }

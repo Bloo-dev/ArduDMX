@@ -6,11 +6,11 @@ DMXFixture::DMXFixture(uint16_t startChannel, uint8_t dimmerDefaultValue) : _red
 {
 }
 
-void DMXFixture::setRGB(uint8_t *rgbValue)
+void DMXFixture::setRGB(uint32_t hexColor)
 {
-    _redValue = rgbValue[0];
-    _greenValue = rgbValue[1];
-    _blueValue = rgbValue[2];
+    _redValue = hexColor >> 16;
+    _greenValue = (hexColor & 0x00FF00) >> 8;
+    _blueValue = hexColor & 0x0000FF;
 }
 
 void DMXFixture::setRGBDimmer(uint8_t dimmerValue)
