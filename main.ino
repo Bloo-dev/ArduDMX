@@ -19,7 +19,7 @@ const float signalAmplification = 6.0;  // amplification of the signal before it
 
 // ===== GLOBAL VARIABLES ======
 // DMX Hardware
-DMX_Master dmxMaster(fixtures[0].channelAmount * 6, 2);
+DMX_Master dmxMaster(fixtures[0].channelAmount * fixtureAmount, 2);
 // FFT Hardware
 Analyzer MSGEQ7 = Analyzer(6, 7, 0);
 uint16_t frequencyAmplitudes[7];
@@ -140,17 +140,18 @@ void transformResponseTables(uint32_t *colorResponseTable, uint32_t *audioRespon
 */
 void setFixtureColor(DMXFixture &targetFixture, int *audioAmplitudes, uint32_t colorResponse)
 {
-    if (audioAmplitudes[1] > 0 || audioAmplitudes[2] > 0 || audioAmplitudes[3] > 0)
-    {
-        return; // condition for switching colors: low frequencies are on zero-level
+    //if (audioAmplitudes[1] > 0 || audioAmplitudes[2] > 0 || audioAmplitudes[3] > 0)
+    //{
+    //    return; // condition for switching colors: low frequencies are on zero-level
                 // TODO proper color cycle condition
                 // IDEAS: Switch on low volume, populate multiple fixtures with one color if response on one band is significantly stronger
                 // IMPORTANT MOVE THIS TO FUNCTION THAT SHUFFLES THE TABLES
                 // in that case, what goes here?
-                // -> setting white, strobe and so on depending on lever states
-    }
+                // -> setting white, strobe and so on depending on lever states, conversion hex->rgb
+    //}
 
-    targetFixture.setRGB(colorResponse);
+    // convert colors to rgb and send to fixture
+    targetFixture.setRGB(colorResponse >> 16, (colorResponse & 0x00FF00) >> 8, colorResponse & 0x0000FF);
 }
 
 /*
@@ -165,7 +166,7 @@ void setFixtureBrightness(DMXFixture &targetFixture, int *audioAmplitudes, uint3
     uint8_t brightness = 0;
     for (uint8_t band = 0; band < 7; band++)
     {
-        if (((audioResponse & (0xF * (band + 1))) >> (band * 4)) >= 0) // TODO allow this to differnetiate between the 16 possible values for each response, also check whether the bit-shift math here checks out
+        if (((audioResponse & (0xF * 10^band)) >> (band * 4)) >= 0) // TODO allow this to differnetiate between the 16 possible values for each response, also check whether the bit-shift math here checks out
         {
             brightness = max(audioAmplitudes[band], brightness);
         }
