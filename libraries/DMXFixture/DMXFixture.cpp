@@ -6,11 +6,16 @@ DMXFixture::DMXFixture(uint16_t startChannel, uint8_t dimmerDefaultValue) : _red
 {
 }
 
-void DMXFixture::setRGB(uint8_t redValue, uint8_t greenValue, uint8_t blueValue)
+void DMXFixture::setRGB(uint8_t *rgbValue)
 {
-    _redValue = redValue;
-    _greenValue = greenValue;
-    _blueValue = blueValue;
+    _redValue = rgbValue[0];
+    _greenValue = rgbValue[1];
+    _blueValue = rgbValue[2];
+}
+
+void DMXFixture::setRGBDimmer(uint8_t dimmerValue)
+{
+    _rgbDimmerValue = dimmerValue;
 }
 
 void DMXFixture::setWhite(uint8_t whiteValue)
@@ -41,9 +46,9 @@ void DMXFixture::reset()
 void DMXFixture::display(DMX_Master &dmxController)
 {
     dmxController.setChannelValue(_dimmerChannel, _dimmerValue);
-    dmxController.setChannelValue(_redChannel, _redValue);
-    dmxController.setChannelValue(_greenChannel, _greenValue);
-    dmxController.setChannelValue(_blueChannel, _blueValue);
+    dmxController.setChannelValue(_redChannel, (uint8_t) (_redValue * ((float)_rgbDimmerValue / 255.0)));
+    dmxController.setChannelValue(_greenChannel,(uint8_t) (_greenValue * ((float)_rgbDimmerValue / 255.0)));
+    dmxController.setChannelValue(_blueChannel, (uint8_t) (_blueValue * ((float)_rgbDimmerValue / 255.0)));
     dmxController.setChannelValue(_whiteChannel, _whiteValue);
     dmxController.setChannelValue(_strobeChannel, _strobeValue);
 }
