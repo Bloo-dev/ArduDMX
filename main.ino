@@ -5,29 +5,36 @@
 // ===== GLOBAL SETTINGS ======
 // Light Fixture Data
 const uint8_t maxBrightness = 217;                                                    // 85% max brightness to increase LED lifetime
-DMXFixture fixtures[] = {DMXFixture(1, maxBrightness), DMXFixture(7, maxBrightness)}; // configured fixtures and their start channels.
-const uint32_t fixtureColors[] = {0xFF0000, 0x0000FF};                                // colors for the configured fixtures to start out with, in order, stored in hex. Should be normalized to avoid differing fixture brightness values from fixture to fixture.
-const uint32_t fixtureFrequencies[] = {0x0000FFF, 0xFFF0000};                         // frequency responses of the fixtures stored in hex. Each digit corresponds to a frequency band, meaning each frequency band can have a response between 15 (max) and 0 (min). Leftmost digits are highest frequencies.
-const uint16_t fixtureAmount = sizeof(fixtures) / sizeof(DMXFixture);
+DMXFixture fixtures[] = {DMXFixture(1, maxBrightness), DMXFixture(7, maxBrightness), DMXFixture(13, maxBrightness)}; // configured fixtures and their start channels.
+const uint32_t fixtureColors[] = {0xFF0000, 0x00FF00, 0x0000FF, 0xFF9000}; // colors for the configured fixtures to start out with, in order, stored in hex. Should be normalized to avoid differing fixture brightness values from fixture to fixture.
+const uint32_t fixtureFrequencies[] = {0x00000F0, 0x00F0000, 0xFF00000, 0x000FF00}; // frequency responses of the fixtures stored in hex. Each digit corresponds to a frequency band, meaning each frequency band can have a response between 15 (max) and 0 (min). Leftmost digits are highest frequencies.
 // MSGEQ7 Signal Data
 const uint8_t samplesPerRun = 16;       // number of consecutive samples to take whenever the audio is sampled (these are then averaged). Higher values inhibit random noise spikes.
 const uint16_t delayBetweenSamples = 1; // time in ms to wait between samples in a consecutive sample run. High values will decrease temporal resolution drastically.
-// const float signalAmplification = 6.0;  // amplification of the signal before it is sent to the light fixtures. Amplifies the signal (0..1024) by this factor (0.0..10.0). This happens AFTER the noise cutoff, meaning any signals lower than noiseCutoff won't be amplified (stay 0).
 //  =============================
 
 // ===== GLOBAL VARIABLES ======
+// Fixture Management
+const uint8_t fixtureAmount = sizeof(fixtures) / sizeof(DMXFixture);
+const uint8_t fixtureResponseCycleLength = min(sizeof(fixtureColors) / sizeof(int),sizeof(fixtureFrequencies) / sizeof(int));
+uint8_t fixtureResponseOffset = 0; // offset for color and frequency response cycle (cycles colors over fixtures)
 // DMX Hardware
 DMX_Master dmxMaster(fixtures[0].channelAmount *fixtureAmount, 2);
 // FFT Hardware
 Analyzer MSGEQ7 = Analyzer(6, 7, 0);
 uint16_t frequencyAmplitudes[7]; // stores data from MSGEQ7 chip
 // Auto Gain
-uint16_t averageAmplitudeHistory[64]; // stores the history of the cross-band average amplitude
-uint8_t currentHistoryEntry = 0;
-float amplificationFactor = 4.0; // TODO mange this automatically
-uint16_t noiseLevel = 0; // lower bound for noise, managed automatically
+uint16_t amplitudeHistory[64]; // stores the history of the cross-band average amplitude
+uint8_t amplitudeHistoryEntry = 0;
+uint16_t clippingHistory[64]; // stores the history of the cross-band clipping duty cycle
+uint8_t clippingHistoryEntry = 0;
+const uint8_t targetDutyCycle = 196.0; // target value for fixture duty cycle (time-clipped/time-not-clipped)
+const float amplificationFactorMax = 32; // maximum allowed amplifaction factor
+const float amplificationFactorMin = 0.03125; // minimal allowed amplification factor
+float amplificationFactor = 12.0; // amplification for signals considered non-noise (ones that should result in a non-zero light response), managed automatically
+uint16_t noiseLevel = 0; // lower bound for noise, determined automatically at startup
 // =============================
-// Settings for basement: noiseLevel=200, signalAmplification=6.0
+// Backup settings for basement: noiseLevel=200, signalAmplification=6.0
 
 void setup()
 {
@@ -39,9 +46,9 @@ void setup()
     dmxMaster.enable();
 
     // Initialize Light Fixtures
-    for (int i = 0; i < fixtureAmount; ++i)
+    for (uint8_t fixtureId = 0; fixtureId < fixtureAmount; fixtureId++)
     {
-        fixtures[i].reset(); // reset to default values
+        fixtures[fixtureId].reset(); // reset to default values
     }
 
     // Analyze Noise Levels (THERE MUST NOT BE AUDIO ON THE JACK FOR THIS TO WORK)
@@ -57,15 +64,15 @@ void loop()
     // get FFT data from MSGEQ7 chip
     sampleMSGEQ7(samplesPerRun, delayBetweenSamples, frequencyAmplitudes);
 
-    // store signal history (without background noise)
-    averageAmplitudeHistory[currentHistoryEntry++] = max((int32_t)getAverage(frequencyAmplitudes, 7, 0) - noiseLevel, 0);
-    if (currentHistoryEntry > 63)
-        currentHistoryEntry = 0;
-    uint16_t signalMean = getAverage(averageAmplitudeHistory, 64, 0);
-    //amplificationFactor = autoGain(signalMean, 84);
+    // Store history of average signal across all bands (with background noise already subtracted)
+    uint16_t signalMean = updateHistory(amplitudeHistory, 64, &amplitudeHistoryEntry, max((int32_t)getAverage(frequencyAmplitudes, 7, 0) - noiseLevel, 0));
 
-    // transform audio signal to light signal
-    transformAudioSignal(max(noiseLevel, signalMean), amplificationFactor, frequencyAmplitudes); // max(noiseLevel, signalMean) pulls signal down to bottom of range [0..255] by essentially subtracting the average of the signal, leaving mostly peaks (useful for amplification).
+    // Store history of duty cycle and transform values in frequencyAmplitudes into range [0..255]
+    uint16_t dutyCycleMean = updateHistory(clippingHistory, 64, &clippingHistoryEntry, transformAudioSignal(noiseLevel + signalMean, amplificationFactor, frequencyAmplitudes));
+
+    // Get new amplification factor based on duty cycle mean (duty cycle of 196 is about 19.1%)
+    amplificationFactor = max(min(targetDutyCycle / dutyCycleMean, amplificationFactorMax), amplificationFactorMin);
+    // TODO add toggle for this for manual gain control
 
     // Cycle Fixtures
     uint32_t transformedColorResponseTable[fixtureAmount];
@@ -73,7 +80,7 @@ void loop()
     transformResponseTables(fixtureColors, transformedColorResponseTable, fixtureFrequencies, transformedAudioResponseTable, fixtureAmount);
 
     // Manage Fixtures
-    for (uint16_t fixtureId = 0; fixtureId < fixtureAmount; fixtureId++)
+    for (uint8_t fixtureId = 0; fixtureId < fixtureAmount; fixtureId++)
     {
         setFixtureColor(fixtures[fixtureId], frequencyAmplitudes, transformedColorResponseTable[fixtureId]);
         setFixtureBrightness(fixtures[fixtureId], frequencyAmplitudes, transformedAudioResponseTable[fixtureId]);
@@ -81,13 +88,25 @@ void loop()
         // send data to fixtures
         fixtures[fixtureId].display(dmxMaster);
     }
+
+    delay(50); // wait a bit to give lights some on-time TODO adjust this timing
 }
 
-// TODO
-float autoGain(uint16_t currentMean, uint16_t targetMean)
+/**
+ * @brief Appends a new entry to a history array, and returns the average of the array.
+ *
+ * @param targetArray The history array to modify.
+ * @param historyLength Length of the history array.
+ * @param currentSlot Adress of the variable that keeps track of the current slot to be modified, i.e. the oldest entry in the history array.
+ * @param valueToWrite The value to be written into slot 'currentSlot'.
+ * @return uint16_t average of the history array.
+ */
+uint16_t updateHistory(uint16_t *targetArray, uint8_t historyLength, uint8_t *currentSlot, uint16_t valueToWrite)
 {
-
-    return 1.0 + ((targetMean - currentMean) / 255.0);
+    targetArray[(*currentSlot)++] = valueToWrite;
+    if ((*currentSlot) > (historyLength - 1))
+        (*currentSlot) = 0;
+    return getAverage(targetArray, historyLength, 0);
 }
 
 /**
@@ -110,18 +129,29 @@ uint16_t getAverage(int *array, uint16_t elements, uint16_t buffer)
 }
 
 /**
- * @brief Transforms a given 12-bit audio signal to an 8 -it signal that can be used to control DMXFixtures. Also performs some cleanup on the signal, like removing noise and scaling the signal to use the entire 8-bit space.
+ * @brief Transforms a given 12-bit audio signal to an 8-bit signal that can be used to control DMXFixtures. Also performs some cleanup on the signal, like removing noise and scaling the signal to use the entire 8-bit space.
  *
- * @param noiseLevel [0..1023] Signals to be ignored due to insufficient signal level. Signals below this threshold will be set to 0. Is applied to the raw signal [0..1023] before the amplification factor.
- * @param amplificationFactor [0.0..10.0] (recommended) Amplification factor to be applied to the signal. Is applied to the raw signal [0..1023] after the noise level was subtracted, meaning noise is not amplified.
+ * @param lowSignalCutOff [0..1023] Signals lower or equal than this will be forced to 0. Applied before amplification.
+ * @param amplificationFactor [0.0..10.0] (recommended) Multiplicative amplification factor to be applied to the signal.
  * @param targetArray The array holding the audio data to be modified. Should have seven (7) entries.
+ * 
+ * @return [0..1023] The duty cycle of the average over all frequency bands in terms of clipping, i.e. how often the signal clipped the upper signal limit of 1023/255.
  */
-void transformAudioSignal(uint16_t noiseLevel, float amplificationFactor, int *targetArray)
+uint16_t transformAudioSignal(uint16_t lowSignalCutOff, float amplificationFactor, int *targetArray)
 {
+    uint16_t bandClippings[] = {0, 0, 0, 0, 0, 0, 0};
     for (uint8_t band = 0; band < 7; band++)
     {
-        targetArray[band] = (int)(min(max(max((int32_t)targetArray[band] - noiseLevel, 0) * amplificationFactor, 0), 1023) / 4); // Cut-off noise, amplify and write to array
+        uint16_t level = amplificationFactor * max((int32_t)targetArray[band] - lowSignalCutOff, 0); // shift signal down, removing noise and static parts of the signal
+        if(level>=1023)
+        {
+            bandClippings[band] = 1023; // remember the signal clipped
+        }
+
+        targetArray[band] = (int)min(level / 4, 255); // scale to [0..255] for use in light fixtures
     }
+
+    return getAverage(bandClippings, 7, 0);
 }
 
 /**
@@ -168,11 +198,16 @@ void transformResponseTables(uint32_t *constColorResponseTable, uint32_t *shuffl
 {
     // TODO find a way to transform the arrays (switch indices and/or remove some entries temporarily)
     // Figure out whether to return new, modified arrays or whether to modify in-place (would require a copy of the input arrays to be made before input)
-
-    for (uint16_t fixtureId = 0; fixtureId < fixtureAmount; fixtureId++) // ID operation for testing purposes (colors are not swapped)
+    if (++fixtureResponseOffset > fixtureResponseCycleLength)
     {
-        shuffledColorResponseTable[fixtureId] = constColorResponseTable[fixtureId];
-        shuffledAudioResponseTable[fixtureId] = constAudioResponseTable[fixtureId];
+        fixtureResponseOffset = 0;
+    }
+
+
+    for (uint8_t fixtureId = 0; fixtureId < fixtureAmount; fixtureId++) // ID operation for testing purposes (colors are not swapped)
+    {
+        shuffledColorResponseTable[fixtureId] = constColorResponseTable[(fixtureId+fixtureResponseOffset)%fixtureResponseCycleLength];
+        shuffledAudioResponseTable[fixtureId] = constAudioResponseTable[(fixtureId+fixtureResponseOffset)%fixtureResponseCycleLength];
     }
 }
 
@@ -204,7 +239,7 @@ void setFixtureBrightness(DMXFixture &targetFixture, int *audioAmplitudes, uint3
     uint8_t brightness = 0;
     for (uint8_t band = 0; band < 7; band++)
     {
-        if (((audioResponse & ((uint32_t)0xF << (band * 4))) >> (band * 4)) == 0xF) // TODO allow this to differnetiate between the 16 possible values for each response, also check whether the bit-shift math here checks out
+        if (((audioResponse & ((uint32_t)0xF << (band * 4))) >> (band * 4)) == 0xF) // TODO allow this to differnetiate between the 16 possible values for each response
         {
             brightness = max(audioAmplitudes[band], brightness);
         }
