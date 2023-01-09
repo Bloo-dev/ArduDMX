@@ -235,9 +235,11 @@ void setFixtureBrightness(DMXFixture &targetFixture, int *audioAmplitudes, uint3
     uint8_t brightness = 0;
     for (uint8_t band = 0; band < 7; band++)
     {
-        if (((audioResponse & ((uint32_t)0xF << (band * 4))) >> (band * 4)) == 0xF) // TODO allow this to differnetiate between the 16 possible values for each response
+        uint8_t bandResponse = ((audioResponse & ((uint32_t)0xF << (band * 4))) >> (band * 4));
+        if (bandResponse > 0)
         {
-            brightness = max(audioAmplitudes[band], brightness);
+            uint8_t bandBrightness = (bandResponse/16.0) * audioAmplitudes[band];
+            brightness = max(bandBrightness, brightness);
         }
     }
     targetFixture.setRGBDimmer(brightness);
