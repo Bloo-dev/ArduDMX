@@ -1,6 +1,3 @@
-#include "Arduino.h"
-// #include "NumericHistory.h"
-
 template <int LENGTH>
 NumericHistory<LENGTH>::NumericHistory() : _oldestEntry(0)
 {

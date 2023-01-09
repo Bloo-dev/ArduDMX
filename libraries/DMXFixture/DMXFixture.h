@@ -1,7 +1,7 @@
 #ifndef DMXFixture_h
 #define DMXFixture_h
-#include "Arduino.h"
 #include "../Conceptinetics/Conceptinetics.h"
+
 class DMXFixture
 {
 public:

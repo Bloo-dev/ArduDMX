@@ -25,7 +25,7 @@ uint16_t frequencyAmplitudes[7]; // stores data from MSGEQ7 chip
 // Auto Gain
 NumericHistory<64> amplitudeHistory = NumericHistory<64>();
 NumericHistory<64> clippingHistory = NumericHistory<64>();
-const uint8_t targetDutyCycle = 196;        // target value for fixture duty cycle (time-clipped/time-not-clipped in parts of 1023, e.g. 196=19.2%)
+const uint8_t targetDutyCycle = 196;          // target value for fixture duty cycle (time-clipped/time-not-clipped in parts of 1023, e.g. 196=19.2%)
 const float amplificationFactorMax = 32;      // maximum allowed amplifaction factor
 const float amplificationFactorMin = 0.03125; // minimal allowed amplification factor
 float amplificationFactor = 12.0;             // amplification for signals considered non-noise (ones that should result in a non-zero light response), managed automatically
@@ -126,7 +126,7 @@ uint16_t transformAudioSignal(uint16_t lowSignalCutOff, float amplificationFacto
     uint16_t bandClippings[] = {0, 0, 0, 0, 0, 0, 0};
     for (uint8_t band = 0; band < 7; band++)
     {
-        uint16_t signalNoNoise = max((int32_t)targetArray[band] - lowSignalCutOff,0);
+        uint16_t signalNoNoise = max((int32_t)targetArray[band] - lowSignalCutOff, 0);
         uint16_t signalAmplified = amplificationFactor * signalNoNoise; // shift signal down, removing noise and static parts of the signal
         if (signalAmplified >= 1023)
         {
@@ -217,7 +217,7 @@ void permutateProfiles(uint32_t permutationHigh, uint32_t permutationLow, Fixtur
 void setFixtureColor(DMXFixture &targetFixture, int *audioAmplitudes, uint32_t colorResponse)
 {
     // what else goes here?
-    // -> setting white, strobe and so on depending on lever states, conversion hex->rgb
+    // -> setting white, strobe and so on depending on lever states
 
     // convert colors to rgb and send to fixture
     targetFixture.setRGB(colorResponse >> 16, (colorResponse & 0x00FF00) >> 8, colorResponse & 0x0000FF);
