@@ -52,3 +52,22 @@ void DMXFixture::display(DMX_Master &dmxController)
     dmxController.setChannelValue(_whiteChannel, _whiteValue);
     dmxController.setChannelValue(_strobeChannel, _strobeValue);
 }
+
+
+FixtureProfile::FixtureProfile(): _color(0x0), _frequency(0x0)
+{
+}
+
+FixtureProfile::FixtureProfile(uint32_t color, uint32_t frequency): _color(color), _frequency(frequency)
+{
+}
+
+uint32_t FixtureProfile::getHexColor()
+{
+    return _color;
+}
+
+uint32_t FixtureProfile::getHexFrequency()
+{
+    return _frequency;
+}
