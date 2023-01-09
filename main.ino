@@ -7,7 +7,8 @@
 // Light Fixture Data
 const uint8_t maxBrightness = 217;                                                                                   // 85% max brightness to increase LED lifetime
 DMXFixture fixtures[] = {DMXFixture(1, maxBrightness), DMXFixture(7, maxBrightness), DMXFixture(13, maxBrightness)}; // configured fixtures and their start channels. The maximum amount of supported fixtures is 16.
-const FixtureProfile profiles[] = {FixtureProfile(0xFF0000, 0x00000F0), FixtureProfile(0x00FF00, 0x00F0000), FixtureProfile(0x0000FF, 0xFF00000), FixtureProfile(0xFF9000, 0x000FF00)};
+const FixtureProfile profiles[] = {FixtureProfile(0xFF0000, 0x00000F0), FixtureProfile(0x00FF00, 0x00F0000), FixtureProfile(0x0000FF, 0xFF00000), FixtureProfile(0xFF9000, 0x000FF00)}; // profiles that fixtures can assume. Each profile consists of a hex code for color and a hex code for frequencies the fixture should respond to.
+const uint8_t targetFrameTimeMillis = 66;
 // MSGEQ7 Signal Data
 const uint8_t samplesPerRun = 16;       // number of consecutive samples to take whenever the audio is sampled (these are then averaged). Higher values inhibit random noise spikes.
 const uint16_t delayBetweenSamples = 1; // time in ms to wait between samples in a consecutive sample run. High values will decrease temporal resolution drastically.
@@ -58,7 +59,10 @@ void setup()
 
 void loop()
 {
-    // get FFT data from MSGEQ7 chip
+    // Store frame start time
+    uint64_t frameStartTime = millis();
+
+    // Get FFT data from MSGEQ7 chip
     sampleMSGEQ7(samplesPerRun, delayBetweenSamples, frequencyAmplitudes);
 
     // Store history of average signal across all bands (with background noise already subtracted)
@@ -89,7 +93,9 @@ void loop()
         fixtures[fixtureId].display(dmxMaster);
     }
 
-    delay(50); // wait a bit to give lights some on-time TODO adjust this timing
+    // Wait until frame time is over
+    int16_t timeSinceFrameStart = targetFrameTimeMillis - (millis() - frameStartTime);
+    delay(max(timeSinceFrameStart, 0));
 }
 
 /**
