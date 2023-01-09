@@ -5,8 +5,8 @@
 
 // ===== GLOBAL SETTINGS ======
 // Light Fixture Data
-const uint8_t maxBrightness = 217;                                                                                   // 85% max brightness to increase LED lifetime
-DMXFixture fixtures[] = {DMXFixture(1, maxBrightness), DMXFixture(7, maxBrightness), DMXFixture(13, maxBrightness)}; // configured fixtures and their start channels. The maximum amount of supported fixtures is 16.
+const uint8_t maxBrightness = 217;                                                                                                                                                      // 85% max brightness to increase LED lifetime
+DMXFixture fixtures[] = {DMXFixture(1, maxBrightness), DMXFixture(7, maxBrightness), DMXFixture(13, maxBrightness)};                                                                    // configured fixtures and their start channels. The maximum amount of supported fixtures is 16.
 const FixtureProfile profiles[] = {FixtureProfile(0xFF0000, 0x00000F0), FixtureProfile(0x00FF00, 0x00F0000), FixtureProfile(0x0000FF, 0xFF00000), FixtureProfile(0xFF9000, 0x000FF00)}; // profiles that fixtures can assume. Each profile consists of a hex code for color and a hex code for frequencies the fixture should respond to.
 const uint8_t targetFrameTimeMillis = 66;
 // MSGEQ7 Signal Data
@@ -17,7 +17,6 @@ const uint16_t delayBetweenSamples = 1; // time in ms to wait between samples in
 // ===== GLOBAL VARIABLES ======
 // Fixture Management
 const uint8_t fixtureAmount = sizeof(fixtures) / sizeof(DMXFixture);
-const uint8_t fixtureProfileAmount = sizeof(profiles) / sizeof(FixtureProfile); // amount of fixture modes is the amount of (color Response, frequencyResponse) pairs. Ignore additional color or frequency responses.
 // DMX Hardware
 DMX_Master dmxMaster(fixtures[0].channelAmount *fixtureAmount, 2);
 // FFT Hardware
@@ -79,7 +78,7 @@ void loop()
     amplificationFactor = constrain(dutyCycleDeviance, amplificationFactorMin, amplificationFactorMax);
     // TODO add toggle for this for manual gain control
 
-    // Cycle Fixtures
+    // Select and Cycle Fixture Profiles
     FixtureProfile permutatedProfiles[fixtureAmount];
     permutateProfiles(0xFEDCBA9876543210, profiles, permutatedProfiles, fixtureAmount);
 
@@ -184,9 +183,15 @@ void sampleMSGEQ7(int8_t sampleAmount, uint16_t sampleDelay, int *targetArray)
 }
 
 /**
-    @brief Transforms the response tables to cycle colors or change frequency response.
-    This is done via instructions supplied via the first two parameters, which, together build a 64-bit instruction, consisting of 16 4-bit source addresses.
-*/
+ * @brief Stores a permutated version of the supplied profile array `constProfiles` into `permutedProfiles` according to a supplied permutation instruction.
+ *
+ * @param permutation The permutation to be used when assembling `permutatedProfiles` from `constProfiles`. The permutation is encoded as a 64-bit number,
+ * consisting of 16 consequtive source addresses. The target address is deducted from the position of the source address within the 64-bit instruction.
+ * E.g. `0x01234567` would load the profile in slot 7 into the fixture in slot 0, the profile in slot 6 into the fixture in slot 1 and so on.
+ * @param constProfiles An array of FixtureProfiles used to read FixtureProfiles from. This should be constant.
+ * @param permutatedProfiles An array of FixtureProfiles that will have the permutation stored into it.
+ * @param fixtureAmount The amount of fixtures.
+ */
 void permutateProfiles(uint64_t permutation, FixtureProfile *constProfiles, FixtureProfile *permutatedProfiles, uint16_t fixtureAmount)
 {
     // automatically cycle instructions by one to make sure fixture see equal usage
@@ -238,7 +243,7 @@ void setFixtureBrightness(DMXFixture &targetFixture, int *audioAmplitudes, uint3
         uint8_t bandResponse = ((audioResponse & ((uint32_t)0xF << (band * 4))) >> (band * 4));
         if (bandResponse > 0)
         {
-            uint8_t bandBrightness = (bandResponse/16.0) * audioAmplitudes[band];
+            uint8_t bandBrightness = (bandResponse / 16.0) * audioAmplitudes[band];
             brightness = max(bandBrightness, brightness);
         }
     }
