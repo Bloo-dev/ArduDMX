@@ -38,4 +38,16 @@ private:
     uint8_t _whiteValue;
     uint8_t _strobeValue;
 };
+
+struct FixtureProfile
+{
+    public:
+        FixtureProfile();
+        FixtureProfile(uint32_t, uint32_t);
+        uint32_t getHexColor();
+        uint32_t getHexFrequency();
+    private:
+        uint32_t _color;
+        uint32_t _frequency;
+};
 #endif

@@ -1,13 +1,13 @@
 #include <AudioAnalyzer.h>
 #include <Conceptinetics.h>
 #include <DMXFixture.h>
+#include <NumericHistory.h>
 
 // ===== GLOBAL SETTINGS ======
 // Light Fixture Data
-const uint8_t maxBrightness = 217;                                                    // 85% max brightness to increase LED lifetime
-DMXFixture fixtures[] = {DMXFixture(1, maxBrightness), DMXFixture(7, maxBrightness), DMXFixture(13, maxBrightness)}; // configured fixtures and their start channels.
-const uint32_t fixtureColors[] = {0xFF0000, 0x00FF00, 0x0000FF, 0xFF9000}; // colors for the configured fixtures to start out with, in order, stored in hex. Should be normalized to avoid differing fixture brightness values from fixture to fixture.
-const uint32_t fixtureFrequencies[] = {0x00000F0, 0x00F0000, 0xFF00000, 0x000FF00}; // frequency responses of the fixtures stored in hex. Each digit corresponds to a frequency band, meaning each frequency band can have a response between 15 (max) and 0 (min). Leftmost digits are highest frequencies.
+const uint8_t maxBrightness = 217;                                                                                   // 85% max brightness to increase LED lifetime
+DMXFixture fixtures[] = {DMXFixture(1, maxBrightness), DMXFixture(7, maxBrightness), DMXFixture(13, maxBrightness)}; // configured fixtures and their start channels. The maximum amount of supported fixtures is 16.
+const FixtureProfile profiles[] = {FixtureProfile(0xFF0000, 0x00000F0), FixtureProfile(0x00FF00, 0x00F0000), FixtureProfile(0x0000FF, 0xFF00000), FixtureProfile(0xFF9000, 0x000FF00)};
 // MSGEQ7 Signal Data
 const uint8_t samplesPerRun = 16;       // number of consecutive samples to take whenever the audio is sampled (these are then averaged). Higher values inhibit random noise spikes.
 const uint16_t delayBetweenSamples = 1; // time in ms to wait between samples in a consecutive sample run. High values will decrease temporal resolution drastically.
@@ -16,23 +16,20 @@ const uint16_t delayBetweenSamples = 1; // time in ms to wait between samples in
 // ===== GLOBAL VARIABLES ======
 // Fixture Management
 const uint8_t fixtureAmount = sizeof(fixtures) / sizeof(DMXFixture);
-const uint8_t fixtureResponseCycleLength = min(sizeof(fixtureColors) / sizeof(int),sizeof(fixtureFrequencies) / sizeof(int));
-uint8_t fixtureResponseOffset = 0; // offset for color and frequency response cycle (cycles colors over fixtures)
+const uint8_t fixtureProfileAmount = sizeof(profiles) / sizeof(FixtureProfile); // amount of fixture modes is the amount of (color Response, frequencyResponse) pairs. Ignore additional color or frequency responses.
 // DMX Hardware
 DMX_Master dmxMaster(fixtures[0].channelAmount *fixtureAmount, 2);
 // FFT Hardware
 Analyzer MSGEQ7 = Analyzer(6, 7, 0);
 uint16_t frequencyAmplitudes[7]; // stores data from MSGEQ7 chip
 // Auto Gain
-uint16_t amplitudeHistory[64]; // stores the history of the cross-band average amplitude
-uint8_t amplitudeHistoryEntry = 0;
-uint16_t clippingHistory[64]; // stores the history of the cross-band clipping duty cycle
-uint8_t clippingHistoryEntry = 0;
-const uint8_t targetDutyCycle = 196.0; // target value for fixture duty cycle (time-clipped/time-not-clipped)
-const float amplificationFactorMax = 32; // maximum allowed amplifaction factor
+NumericHistory<64> amplitudeHistory = NumericHistory<64>();
+NumericHistory<64> clippingHistory = NumericHistory<64>();
+const uint8_t targetDutyCycle = 196;        // target value for fixture duty cycle (time-clipped/time-not-clipped in parts of 1023, e.g. 196=19.2%)
+const float amplificationFactorMax = 32;      // maximum allowed amplifaction factor
 const float amplificationFactorMin = 0.03125; // minimal allowed amplification factor
-float amplificationFactor = 12.0; // amplification for signals considered non-noise (ones that should result in a non-zero light response), managed automatically
-uint16_t noiseLevel = 0; // lower bound for noise, determined automatically at startup
+float amplificationFactor = 12.0;             // amplification for signals considered non-noise (ones that should result in a non-zero light response), managed automatically
+uint16_t noiseLevel = 0;                      // lower bound for noise, determined automatically at startup
 // =============================
 // Backup settings for basement: noiseLevel=200, signalAmplification=6.0
 
@@ -65,48 +62,34 @@ void loop()
     sampleMSGEQ7(samplesPerRun, delayBetweenSamples, frequencyAmplitudes);
 
     // Store history of average signal across all bands (with background noise already subtracted)
-    uint16_t signalMean = updateHistory(amplitudeHistory, 64, &amplitudeHistoryEntry, max((int32_t)getAverage(frequencyAmplitudes, 7, 0) - noiseLevel, 0));
+    uint16_t averageAmplitudeNoNoise = max((int32_t)getAverage(frequencyAmplitudes, 7, 0) - noiseLevel, 0);
+    amplitudeHistory.update(averageAmplitudeNoNoise);
+    uint16_t signalMean = getAverage(amplitudeHistory.get(), amplitudeHistory.length(), 0);
 
     // Store history of duty cycle and transform values in frequencyAmplitudes into range [0..255]
-    uint16_t dutyCycleMean = updateHistory(clippingHistory, 64, &clippingHistoryEntry, transformAudioSignal(noiseLevel + signalMean, amplificationFactor, frequencyAmplitudes));
+    clippingHistory.update(transformAudioSignal(noiseLevel + signalMean, amplificationFactor, frequencyAmplitudes));
+    uint16_t dutyCycleMean = getAverage(clippingHistory.get(), clippingHistory.length(), 0);
 
     // Get new amplification factor based on duty cycle mean (duty cycle of 196 is about 19.1%)
-    amplificationFactor = max(min(targetDutyCycle / dutyCycleMean, amplificationFactorMax), amplificationFactorMin);
+    float dutyCycleDeviance = (float)targetDutyCycle / dutyCycleMean;
+    amplificationFactor = constrain(dutyCycleDeviance, amplificationFactorMin, amplificationFactorMax);
     // TODO add toggle for this for manual gain control
 
     // Cycle Fixtures
-    uint32_t transformedColorResponseTable[fixtureAmount];
-    uint32_t transformedAudioResponseTable[fixtureAmount];
-    transformResponseTables(fixtureColors, transformedColorResponseTable, fixtureFrequencies, transformedAudioResponseTable, fixtureAmount);
+    FixtureProfile permutatedProfiles[fixtureAmount];
+    permutateProfiles(0xFEDCBA98, 0x76543210, profiles, permutatedProfiles, fixtureAmount);
 
     // Manage Fixtures
     for (uint8_t fixtureId = 0; fixtureId < fixtureAmount; fixtureId++)
     {
-        setFixtureColor(fixtures[fixtureId], frequencyAmplitudes, transformedColorResponseTable[fixtureId]);
-        setFixtureBrightness(fixtures[fixtureId], frequencyAmplitudes, transformedAudioResponseTable[fixtureId]);
+        setFixtureColor(fixtures[fixtureId], frequencyAmplitudes, permutatedProfiles[fixtureId].getHexColor());
+        setFixtureBrightness(fixtures[fixtureId], frequencyAmplitudes, permutatedProfiles[fixtureId].getHexFrequency());
 
         // send data to fixtures
         fixtures[fixtureId].display(dmxMaster);
     }
 
     delay(50); // wait a bit to give lights some on-time TODO adjust this timing
-}
-
-/**
- * @brief Appends a new entry to a history array, and returns the average of the array.
- *
- * @param targetArray The history array to modify.
- * @param historyLength Length of the history array.
- * @param currentSlot Adress of the variable that keeps track of the current slot to be modified, i.e. the oldest entry in the history array.
- * @param valueToWrite The value to be written into slot 'currentSlot'.
- * @return uint16_t average of the history array.
- */
-uint16_t updateHistory(uint16_t *targetArray, uint8_t historyLength, uint8_t *currentSlot, uint16_t valueToWrite)
-{
-    targetArray[(*currentSlot)++] = valueToWrite;
-    if ((*currentSlot) > (historyLength - 1))
-        (*currentSlot) = 0;
-    return getAverage(targetArray, historyLength, 0);
 }
 
 /**
@@ -125,7 +108,8 @@ uint16_t getAverage(int *array, uint16_t elements, uint16_t buffer)
         sum += array[i];
     }
 
-    return min(buffer + (sum / elements), 1023);
+    sum = buffer + (sum / elements);
+    return min(sum, 1023);
 }
 
 /**
@@ -134,7 +118,7 @@ uint16_t getAverage(int *array, uint16_t elements, uint16_t buffer)
  * @param lowSignalCutOff [0..1023] Signals lower or equal than this will be forced to 0. Applied before amplification.
  * @param amplificationFactor [0.0..10.0] (recommended) Multiplicative amplification factor to be applied to the signal.
  * @param targetArray The array holding the audio data to be modified. Should have seven (7) entries.
- * 
+ *
  * @return [0..1023] The duty cycle of the average over all frequency bands in terms of clipping, i.e. how often the signal clipped the upper signal limit of 1023/255.
  */
 uint16_t transformAudioSignal(uint16_t lowSignalCutOff, float amplificationFactor, int *targetArray)
@@ -142,13 +126,15 @@ uint16_t transformAudioSignal(uint16_t lowSignalCutOff, float amplificationFacto
     uint16_t bandClippings[] = {0, 0, 0, 0, 0, 0, 0};
     for (uint8_t band = 0; band < 7; band++)
     {
-        uint16_t level = amplificationFactor * max((int32_t)targetArray[band] - lowSignalCutOff, 0); // shift signal down, removing noise and static parts of the signal
-        if(level>=1023)
+        uint16_t signalNoNoise = max((int32_t)targetArray[band] - lowSignalCutOff,0);
+        uint16_t signalAmplified = amplificationFactor * signalNoNoise; // shift signal down, removing noise and static parts of the signal
+        if (signalAmplified >= 1023)
         {
             bandClippings[band] = 1023; // remember the signal clipped
         }
 
-        targetArray[band] = (int)min(level / 4, 255); // scale to [0..255] for use in light fixtures
+        signalAmplified = signalAmplified / 4;
+        targetArray[band] = (int)min(signalAmplified, 255); // scale to [0..255] for use in light fixtures
     }
 
     return getAverage(bandClippings, 7, 0);
@@ -192,22 +178,32 @@ void sampleMSGEQ7(int8_t sampleAmount, uint16_t sampleDelay, int *targetArray)
 }
 
 /**
-    @brief Transforms the response tables to cycle colors or change frequency response. TODO
+    @brief Transforms the response tables to cycle colors or change frequency response.
+    This is done via instructions supplied via the first three parameters, which, together build a 96-bit instruction, consisting of 16 6-bit instructions.
+    Each 6-bit instruction is structured as: 0b(0000)[00] where the 2 bits in square brackets specify the instruction type,
+    and the 4 bits in the round brackets specify the target fixture this instruction should apply to.
+    The source fixture (need for some operations) is dependent on the position of the 6-bit instruction within the 12 byte instruction.
 */
-void transformResponseTables(uint32_t *constColorResponseTable, uint32_t *shuffledColorResponseTable, uint32_t *constAudioResponseTable, uint32_t *shuffledAudioResponseTable, uint16_t fixtureAmount)
+void permutateProfiles(uint32_t permutationHigh, uint32_t permutationLow, FixtureProfile *constProfiles, FixtureProfile *permutatedProfiles, uint16_t fixtureAmount)
 {
-    // TODO find a way to transform the arrays (switch indices and/or remove some entries temporarily)
-    // Figure out whether to return new, modified arrays or whether to modify in-place (would require a copy of the input arrays to be made before input)
-    if (++fixtureResponseOffset > fixtureResponseCycleLength)
-    {
-        fixtureResponseOffset = 0;
-    }
+    // automatically cycle instructions by one to make sure fixture see equal usage
+    // uint8_t underflow = permutationLow & 0b1111; // TODO built 0xF with as many F as the phase
+    // permutationLow = (permutationLow >> (4*phase)) + ((permutationHigh & 0b1111) << (28*phase));
+    // permutationHigh = (permutationHigh >> (4*phase)) + (underflow << (28*phase));
 
-
-    for (uint8_t fixtureId = 0; fixtureId < fixtureAmount; fixtureId++) // ID operation for testing purposes (colors are not swapped)
+    // store shuffled profiles into arrays for the fixtures to read from.
+    // Note that these arrays only require a length of fixtureAmount, as any additional profiles will not be displayed on a fixture anyways.
+    for (uint8_t profileSlot = 0; profileSlot < fixtureAmount; profileSlot++)
     {
-        shuffledColorResponseTable[fixtureId] = constColorResponseTable[(fixtureId+fixtureResponseOffset)%fixtureResponseCycleLength];
-        shuffledAudioResponseTable[fixtureId] = constAudioResponseTable[(fixtureId+fixtureResponseOffset)%fixtureResponseCycleLength];
+        // extract lowest instruction
+        uint8_t profileSource = (permutationLow & 0b1111);
+
+        // shift remaining instructions
+        permutationLow = (permutationLow >> 4) + ((permutationHigh & 0b1111) << 28);
+        permutationHigh = (permutationHigh >> 4);
+
+        // store to shuffled profile
+        permutatedProfiles[profileSlot] = constProfiles[profileSource];
     }
 }
 
@@ -216,7 +212,7 @@ void transformResponseTables(uint32_t *constColorResponseTable, uint32_t *shuffl
 
     @param &targetFixture Fixture to be adjusted.
     @param *audioAmplitudes 7 element uint32_t array of amplitudes per frequency band.
-    @param colorResponse [..0xFFFFFF] hex value that represents the color to be displayed by this fixture.
+    @param colorResponse [0..0xFFFFFF] hex value that represents the color to be displayed by this fixture.
 */
 void setFixtureColor(DMXFixture &targetFixture, int *audioAmplitudes, uint32_t colorResponse)
 {
@@ -232,7 +228,7 @@ void setFixtureColor(DMXFixture &targetFixture, int *audioAmplitudes, uint32_t c
 
     @param targetFixture Fixture to be adjusted.
     @param audioAmplitudes 7 element uint32_t array of amplitudes per frequency band.
-    @param audioResponse [..0xFFFFFFF] hex value that represents the frequencies this fixture should respond to.
+    @param audioResponse [0..0xFFFFFFF] hex value that represents the frequencies this fixture should respond to.
 */
 void setFixtureBrightness(DMXFixture &targetFixture, int *audioAmplitudes, uint32_t audioResponse)
 {
