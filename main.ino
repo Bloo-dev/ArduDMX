@@ -25,7 +25,7 @@ uint16_t frequencyAmplitudes[7]; // stores data from MSGEQ7 chip
 // Auto Gain
 NumericHistory<64> amplitudeHistory = NumericHistory<64>();
 NumericHistory<64> clippingHistory = NumericHistory<64>();
-const uint8_t targetDutyCycle = 196.0;        // target value for fixture duty cycle (time-clipped/time-not-clipped)
+const uint8_t targetDutyCycle = 196;        // target value for fixture duty cycle (time-clipped/time-not-clipped in parts of 1023, e.g. 196=19.2%)
 const float amplificationFactorMax = 32;      // maximum allowed amplifaction factor
 const float amplificationFactorMin = 0.03125; // minimal allowed amplification factor
 float amplificationFactor = 12.0;             // amplification for signals considered non-noise (ones that should result in a non-zero light response), managed automatically
@@ -62,8 +62,8 @@ void loop()
     sampleMSGEQ7(samplesPerRun, delayBetweenSamples, frequencyAmplitudes);
 
     // Store history of average signal across all bands (with background noise already subtracted)
-    uint32_t averageAmplitudeNoNoise = getAverage(frequencyAmplitudes, 7, 0) - noiseLevel;
-    amplitudeHistory.update(max(averageAmplitudeNoNoise, 0));
+    uint16_t averageAmplitudeNoNoise = max((int32_t)getAverage(frequencyAmplitudes, 7, 0) - noiseLevel, 0);
+    amplitudeHistory.update(averageAmplitudeNoNoise);
     uint16_t signalMean = getAverage(amplitudeHistory.get(), amplitudeHistory.length(), 0);
 
     // Store history of duty cycle and transform values in frequencyAmplitudes into range [0..255]
@@ -71,7 +71,7 @@ void loop()
     uint16_t dutyCycleMean = getAverage(clippingHistory.get(), clippingHistory.length(), 0);
 
     // Get new amplification factor based on duty cycle mean (duty cycle of 196 is about 19.1%)
-    float dutyCycleDeviance = targetDutyCycle / dutyCycleMean;
+    float dutyCycleDeviance = (float)targetDutyCycle / dutyCycleMean;
     amplificationFactor = constrain(dutyCycleDeviance, amplificationFactorMin, amplificationFactorMax);
     // TODO add toggle for this for manual gain control
 
@@ -126,15 +126,15 @@ uint16_t transformAudioSignal(uint16_t lowSignalCutOff, float amplificationFacto
     uint16_t bandClippings[] = {0, 0, 0, 0, 0, 0, 0};
     for (uint8_t band = 0; band < 7; band++)
     {
-        int32_t rawSensorData = targetArray[band] - lowSignalCutOff;
-        uint16_t level = amplificationFactor * max(rawSensorData, 0); // shift signal down, removing noise and static parts of the signal
-        if (level >= 1023)
+        uint16_t signalNoNoise = max((int32_t)targetArray[band] - lowSignalCutOff,0);
+        uint16_t signalAmplified = amplificationFactor * signalNoNoise; // shift signal down, removing noise and static parts of the signal
+        if (signalAmplified >= 1023)
         {
             bandClippings[band] = 1023; // remember the signal clipped
         }
 
-        level = level / 4;
-        targetArray[band] = (int)min(level, 255); // scale to [0..255] for use in light fixtures
+        signalAmplified = signalAmplified / 4;
+        targetArray[band] = (int)min(signalAmplified, 255); // scale to [0..255] for use in light fixtures
     }
 
     return getAverage(bandClippings, 7, 0);
