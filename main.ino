@@ -77,7 +77,7 @@ void loop()
 
     // Cycle Fixtures
     FixtureProfile permutatedProfiles[fixtureAmount];
-    permutateProfiles(0xFEDCBA98, 0x76543210, profiles, permutatedProfiles, fixtureAmount);
+    permutateProfiles(0xFEDCBA9876543210, profiles, permutatedProfiles, fixtureAmount);
 
     // Manage Fixtures
     for (uint8_t fixtureId = 0; fixtureId < fixtureAmount; fixtureId++)
@@ -179,12 +179,9 @@ void sampleMSGEQ7(int8_t sampleAmount, uint16_t sampleDelay, int *targetArray)
 
 /**
     @brief Transforms the response tables to cycle colors or change frequency response.
-    This is done via instructions supplied via the first three parameters, which, together build a 96-bit instruction, consisting of 16 6-bit instructions.
-    Each 6-bit instruction is structured as: 0b(0000)[00] where the 2 bits in square brackets specify the instruction type,
-    and the 4 bits in the round brackets specify the target fixture this instruction should apply to.
-    The source fixture (need for some operations) is dependent on the position of the 6-bit instruction within the 12 byte instruction.
+    This is done via instructions supplied via the first two parameters, which, together build a 64-bit instruction, consisting of 16 4-bit source addresses.
 */
-void permutateProfiles(uint32_t permutationHigh, uint32_t permutationLow, FixtureProfile *constProfiles, FixtureProfile *permutatedProfiles, uint16_t fixtureAmount)
+void permutateProfiles(uint64_t permutation, FixtureProfile *constProfiles, FixtureProfile *permutatedProfiles, uint16_t fixtureAmount)
 {
     // automatically cycle instructions by one to make sure fixture see equal usage
     // uint8_t underflow = permutationLow & 0b1111; // TODO built 0xF with as many F as the phase
@@ -195,12 +192,9 @@ void permutateProfiles(uint32_t permutationHigh, uint32_t permutationLow, Fixtur
     // Note that these arrays only require a length of fixtureAmount, as any additional profiles will not be displayed on a fixture anyways.
     for (uint8_t profileSlot = 0; profileSlot < fixtureAmount; profileSlot++)
     {
-        // extract lowest instruction
-        uint8_t profileSource = (permutationLow & 0b1111);
-
-        // shift remaining instructions
-        permutationLow = (permutationLow >> 4) + ((permutationHigh & 0b1111) << 28);
-        permutationHigh = (permutationHigh >> 4);
+        // extract lowest instruction and shift remaining instructions
+        uint8_t profileSource = (permutation & 0b1111);
+        permutation = (permutation >> 4);
 
         // store to shuffled profile
         permutatedProfiles[profileSlot] = constProfiles[profileSource];
