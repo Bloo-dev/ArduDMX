@@ -1,17 +1,16 @@
-template <int LENGTH>
-NumericHistory<LENGTH>::NumericHistory() : _oldestEntry(0)
+template <uint8_t LENGTH>
+NumericHistory<LENGTH>::NumericHistory() : _latestEntry(LENGTH - 1)
 {
 }
 
-template <int LENGTH>
+template <uint8_t LENGTH>
 void NumericHistory<LENGTH>::update(uint16_t value)
 {
-    _history[_oldestEntry++] = value;
-    if (_oldestEntry > (LENGTH - 1))
-        _oldestEntry = 0;
+    _latestEntry = (_latestEntry + 1) % LENGTH;
+    _history[_latestEntry] = value;
 }
 
-template <int LENGTH>
+template <uint8_t LENGTH>
 uint16_t *NumericHistory<LENGTH>::get()
 {
     static uint16_t out[LENGTH];
@@ -24,7 +23,13 @@ uint16_t *NumericHistory<LENGTH>::get()
     return out;
 }
 
-template <int LENGTH>
+template <uint8_t LENGTH>
+uint16_t NumericHistory<LENGTH>::get(uint8_t index)
+{
+    return _history[(_latestEntry + index) % LENGTH];
+}
+
+template <uint8_t LENGTH>
 uint8_t NumericHistory<LENGTH>::length()
 {
     return LENGTH;
