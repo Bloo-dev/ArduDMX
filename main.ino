@@ -6,7 +6,7 @@
 // ===== GLOBAL SETTINGS ======
 // Light Fixture Data
 const uint8_t maxBrightness = 217;                                                                                                                                                      // 85% max brightness to increase LED lifetime
-DMXFixture fixtures[] = {DMXFixture(1, maxBrightness), DMXFixture(7, maxBrightness), DMXFixture(13, maxBrightness)};                                                                    // configured fixtures and their start channels. The maximum amount of supported fixtures is 16.
+DMXFixture fixtures[] = {DMXFixture(1, maxBrightness)};                                                                                                                                 // configured fixtures and their start channels. The maximum amount of supported fixtures is 16.
 const FixtureProfile profiles[] = {FixtureProfile(0xFF0000, 0x00000F0), FixtureProfile(0x00FF00, 0x00F0000), FixtureProfile(0x0000FF, 0xFF00000), FixtureProfile(0xFF9000, 0x000FF00)}; // profiles that fixtures can assume. Each profile consists of a hex code for color and a hex code for frequencies the fixture should respond to.
 const uint8_t targetFrameTimeMillis = 66;
 // MSGEQ7 Signal Data
@@ -17,6 +17,11 @@ const uint16_t delayBetweenSamples = 1; // time in ms to wait between samples in
 // ===== GLOBAL VARIABLES ======
 // Fixture Management
 const uint8_t fixtureAmount = sizeof(fixtures) / sizeof(DMXFixture);
+const uint8_t profileAmount = sizeof(profiles) / sizeof(FixtureProfile);
+// Automatic Profile Cycling
+uint8_t cyclePhase = 0;
+uint64_t cycleTimestamp = 0;
+const uint16_t cycleLengthMs = 60000;
 // DMX Hardware
 DMX_Master dmxMaster(fixtures[0].channelAmount *fixtureAmount, 2);
 // FFT Hardware
@@ -80,7 +85,7 @@ void loop()
 
     // Select and Cycle Fixture Profiles
     FixtureProfile permutatedProfiles[fixtureAmount];
-    permutateProfiles(0xFEDCBA9876543210, profiles, permutatedProfiles, fixtureAmount);
+    permutateProfiles(generatePermutationCode(frequencyAmplitudes), profiles, permutatedProfiles, fixtureAmount);
 
     // Manage Fixtures
     for (uint8_t fixtureId = 0; fixtureId < fixtureAmount; fixtureId++)
@@ -194,22 +199,37 @@ void sampleMSGEQ7(int8_t sampleAmount, uint16_t sampleDelay, int *targetArray)
  */
 void permutateProfiles(uint64_t permutation, FixtureProfile *constProfiles, FixtureProfile *permutatedProfiles, uint16_t fixtureAmount)
 {
-    // automatically cycle instructions by one to make sure fixture see equal usage
-    // uint8_t underflow = permutationLow & 0b1111; // TODO built 0xF with as many F as the phase
-    // permutationLow = (permutationLow >> (4*phase)) + ((permutationHigh & 0b1111) << (28*phase));
-    // permutationHigh = (permutationHigh >> (4*phase)) + (underflow << (28*phase));
-
     // store shuffled profiles into arrays for the fixtures to read from.
     // Note that these arrays only require a length of fixtureAmount, as any additional profiles will not be displayed on a fixture anyways.
     for (uint8_t profileSlot = 0; profileSlot < fixtureAmount; profileSlot++)
     {
         // extract lowest instruction and shift remaining instructions
-        uint8_t profileSource = (permutation & 0b1111);
+        uint8_t profileSource = (permutation & 0xF);
         permutation = (permutation >> 4);
 
         // store to shuffled profile
         permutatedProfiles[profileSlot] = constProfiles[profileSource];
     }
+}
+
+uint64_t generatePermutationCode(int *audioAmplitudes)
+{
+    // build instruction of correct length for profile amount
+    uint64_t instruction = 0xFEDCBA9876543210 & ((0x1 << (4 * profileAmount)) - 0x1);
+
+    // advance cycle phase if necessary
+    uint64_t timeNow = millis();
+    if (timeNow - cycleTimestamp > cycleLengthMs)
+    {
+        cyclePhase = (cyclePhase + 1) % profileAmount;
+        cycleTimestamp = timeNow;
+    }
+
+    // cycle permutation to correct cycle position
+    uint8_t instructionShift = 4 * (cyclePhase % profileAmount);
+    instruction = (instruction >> instructionShift) + ((instruction & ((0x1 << instructionShift) - 0x1)) << ((4 * profileAmount) - instructionShift));
+
+return instruction;
 }
 
 /**
