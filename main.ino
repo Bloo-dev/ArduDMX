@@ -6,8 +6,8 @@
 // ===== GLOBAL SETTINGS ======
 // Light Fixture Data
 const uint8_t maxBrightness = 217;                                                                                                                                                      // 85% max brightness to increase LED lifetime
-DMXFixture fixtures[] = {DMXFixture(1, maxBrightness)};                                                                                                                                 // configured fixtures and their start channels. The maximum amount of supported fixtures is 16.
-const FixtureProfile profiles[] = {FixtureProfile(0xFF0000, 0x00000F0), FixtureProfile(0x00FF00, 0x00F0000), FixtureProfile(0x0000FF, 0xFF00000), FixtureProfile(0xFF9000, 0x000FF00)}; // profiles that fixtures can assume. Each profile consists of a hex code for color and a hex code for frequencies the fixture should respond to.
+DMXFixture fixtures[] = {DMXFixture(1, maxBrightness), DMXFixture(7, maxBrightness), DMXFixture(13, maxBrightness), DMXFixture(19, maxBrightness)};                                       // configured fixtures and their start channels. The maximum amount of supported fixtures is 16.
+const FixtureProfile profiles[] = {FixtureProfile(0xFF0000, 0x00000FF), FixtureProfile(0x0000FF, 0xFF00000), FixtureProfile(0xFF0000, 0x00000FF), FixtureProfile(0x00FF00, 0x0039000)};   // profiles that fixtures can assume. Each profile consists of a hex code for color and a hex code for frequencies the fixture should respond to.
 const uint8_t targetFrameTimeMillis = 66;
 // MSGEQ7 Signal Data
 const uint8_t samplesPerRun = 16;       // number of consecutive samples to take whenever the audio is sampled (these are then averaged). Higher values inhibit random noise spikes.
@@ -19,9 +19,9 @@ const uint16_t delayBetweenSamples = 1; // time in ms to wait between samples in
 const uint8_t fixtureAmount = sizeof(fixtures) / sizeof(DMXFixture);
 const uint8_t profileAmount = sizeof(profiles) / sizeof(FixtureProfile);
 // Automatic Profile Cycling
-uint8_t cyclePhase = 0;
-uint64_t cycleTimestamp = 0;
-const uint16_t cycleLengthMs = 60000;
+uint64_t lastPermutatedAtMs;
+uint64_t cachedPermutationCode;
+const uint16_t permutationCycleLengthMs = 5000;
 // DMX Hardware
 DMX_Master dmxMaster(fixtures[0].channelAmount *fixtureAmount, 2);
 // FFT Hardware
@@ -30,9 +30,9 @@ uint16_t frequencyAmplitudes[7]; // stores data from MSGEQ7 chip
 // Auto Gain
 NumericHistory<64> amplitudeHistory = NumericHistory<64>();
 NumericHistory<64> clippingHistory = NumericHistory<64>();
-const uint8_t targetDutyCycle = 196;          // target value for fixture duty cycle (time-clipped/time-not-clipped in parts of 1023, e.g. 196=19.2%)
-const float amplificationFactorMax = 32;      // maximum allowed amplifaction factor
-const float amplificationFactorMin = 0.03125; // minimal allowed amplification factor
+const uint8_t targetDutyCycle = 196;          // target value for fixture cross-frequency duty cycle (time-clipped/time-not-clipped in parts of 1023, e.g. 196=19.2%)
+const float amplificationFactorMax = 64;      // maximum allowed amplifaction factor
+const float amplificationFactorMin = 0.015625; // minimal allowed amplification factor
 float amplificationFactor = 12.0;             // amplification for signals considered non-noise (ones that should result in a non-zero light response), managed automatically
 uint16_t noiseLevel = 0;                      // lower bound for noise, determined automatically at startup
 // =============================
@@ -52,6 +52,10 @@ void setup()
     {
         fixtures[fixtureId].reset(); // reset to default values
     }
+
+    // Generate Profile Permutation Code
+    cachedPermutationCode = 0xFEDCBA9876543210ul & ((0x1ul << (4 * profileAmount)) - 0x1); // ul postfix required to format literal as unsigned long
+    lastPermutatedAtMs = 0;
 
     // Analyze Noise Levels (THERE MUST NOT BE AUDIO ON THE JACK FOR THIS TO WORK)
     int noiseData[] = {0, 0, 0, 0, 0, 0, 0};
@@ -85,7 +89,7 @@ void loop()
 
     // Select and Cycle Fixture Profiles
     FixtureProfile permutatedProfiles[fixtureAmount];
-    permutateProfiles(generatePermutationCode(frequencyAmplitudes), profiles, permutatedProfiles, fixtureAmount);
+    permutateProfiles(generatePermutationCode(cachedPermutationCode), profiles, permutatedProfiles, fixtureAmount);
 
     // Manage Fixtures
     for (uint8_t fixtureId = 0; fixtureId < fixtureAmount; fixtureId++)
@@ -212,24 +216,17 @@ void permutateProfiles(uint64_t permutation, FixtureProfile *constProfiles, Fixt
     }
 }
 
-uint64_t generatePermutationCode(int *audioAmplitudes)
+uint64_t generatePermutationCode(uint64_t &previousPermutationCode)
 {
-    // build instruction of correct length for profile amount
-    uint64_t instruction = 0xFEDCBA9876543210 & ((0x1 << (4 * profileAmount)) - 0x1);
-
-    // advance cycle phase if necessary
+    // if last permutation shift wasn't too long, return last permutation
     uint64_t timeNow = millis();
-    if (timeNow - cycleTimestamp > cycleLengthMs)
-    {
-        cyclePhase = (cyclePhase + 1) % profileAmount;
-        cycleTimestamp = timeNow;
-    }
+    if (timeNow - lastPermutatedAtMs < permutationCycleLengthMs)
+        return previousPermutationCode;
 
-    // cycle permutation to correct cycle position
-    uint8_t instructionShift = 4 * (cyclePhase % profileAmount);
-    instruction = (instruction >> instructionShift) + ((instruction & ((0x1 << instructionShift) - 0x1)) << ((4 * profileAmount) - instructionShift));
-
-return instruction;
+    // shift last permutation
+    previousPermutationCode = (previousPermutationCode >> 4) + ((previousPermutationCode & ((0x1ul << 4) - 0x1)) << ((4 * profileAmount) - 4));
+    lastPermutatedAtMs = timeNow;
+    return previousPermutationCode;
 }
 
 /**
