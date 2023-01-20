@@ -255,14 +255,15 @@ void setFixtureColor(DMXFixture &targetFixture, int *audioAmplitudes, uint32_t c
 void setFixtureBrightness(DMXFixture &targetFixture, int *audioAmplitudes, uint32_t audioResponse)
 {
     uint8_t brightness = 0;
+    uint8_t observedBands = 0;
     for (uint8_t band = 0; band < 7; band++)
     {
         uint8_t bandResponse = ((audioResponse & ((uint32_t)0xF << (band * 4))) >> (band * 4));
         if (bandResponse > 0)
         {
-            uint8_t bandBrightness = (bandResponse / 16.0) * audioAmplitudes[band];
-            brightness = max(bandBrightness, brightness);
+            brightness += (bandResponse / 16.0) * audioAmplitudes[band];
+            observedBands++;
         }
     }
-    targetFixture.setRGBDimmer(brightness);
+    targetFixture.setRGBDimmer((uint8_t)(brightness / observedBands));
 }
