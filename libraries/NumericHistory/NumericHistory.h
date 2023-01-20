@@ -2,12 +2,12 @@
 #define NumericHistory_h
 
 /**
- * @brief NumericHistory is a simple, internally manged discarding queue capable of storing up to 256 `uint16_t` numbers.
+ * @brief NumericHistory is a simple, internally manged discarding queue capable of storing up to 256 `TYPE` numbers.
  * Once `LENGTH` amount of entries were stored, the oldest entries will start to be overwritten by new entries in chronological order.
  * 
  * @tparam LENGTH Length of the queue. This defines when to start overwriting old entries with new ones. Smaller values save on memory.
  */
-template <uint8_t LENGTH>
+template <typename TYPE, uint8_t LENGTH>
 class NumericHistory
 {
 public:
@@ -22,26 +22,26 @@ public:
      *
      * @param value The value to be written to the queue.
      */
-    void update(uint16_t value);
+    void update(TYPE value);
 
     /**
      * @brief Returns the full history.
      * 
-     * @return uint16_t* A pointer to the start of the history array in memory.
+     * @return TYPE* A pointer to the start of the history array in memory.
      * The user must be careful not to access memory past the last entry, this can be ensure via checking the length of the history.
      * 
      * @see length
      */
-    uint16_t *get();
+    TYPE *get();
 
     /**
      * @brief Returns a single entry from history.
      * 
      * @param index The index of the entry to be returned, relative to the latest entry. `index=0` will yield the latest entry itself, `index=1` will yield the nextoldest entry and so on.
      * The user must ensure not to query entries past the history's length.
-     * @return uint16_t 
+     * @return TYPE 
      */
-    uint16_t get(uint8_t index);
+    TYPE get(uint8_t index);
 
     /**
      * @brief Returns the length of the history, and thereby the internal array.
@@ -51,7 +51,7 @@ public:
     uint8_t length();
 
 private:
-    uint16_t _history[LENGTH];
+    TYPE _history[LENGTH];
     uint8_t _latestEntry;
 };
 

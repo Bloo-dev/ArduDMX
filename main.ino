@@ -28,8 +28,8 @@ DMX_Master dmxMaster(fixtures[0].channelAmount *fixtureAmount, 2);
 Analyzer MSGEQ7 = Analyzer(6, 7, 0);
 uint16_t frequencyAmplitudes[7]; // stores data from MSGEQ7 chip
 // Auto Gain
-NumericHistory<64> amplitudeHistory = NumericHistory<64>();
-NumericHistory<64> clippingHistory = NumericHistory<64>();
+NumericHistory<uint16_t,64> amplitudeHistory = NumericHistory<uint16_t,64>();
+NumericHistory<uint16_t,64> clippingHistory = NumericHistory<uint16_t,64>();
 const uint8_t targetDutyCycle = 196;          // target value for fixture cross-frequency duty cycle (time-clipped/time-not-clipped in parts of 1023, e.g. 196=19.2%)
 const float amplificationFactorMax = 64;      // maximum allowed amplifaction factor
 const float amplificationFactorMin = 0.015625; // minimal allowed amplification factor
