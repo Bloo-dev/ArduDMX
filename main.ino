@@ -8,7 +8,7 @@
 const uint8_t maxBrightness = 217;                                                                                                                                                      // 85% max brightness to increase LED lifetime
 DMXFixture fixtures[] = {DMXFixture(1, maxBrightness), DMXFixture(7, maxBrightness), DMXFixture(13, maxBrightness), DMXFixture(19, maxBrightness)};                                       // configured fixtures and their start channels. The maximum amount of supported fixtures is 16.
 const FixtureProfile profiles[] = {FixtureProfile(0xFF0000, 0x00000FF), FixtureProfile(0x0000FF, 0xFF00000), FixtureProfile(0xFF0000, 0x00000FF), FixtureProfile(0x00FF00, 0x0039000)};   // profiles that fixtures can assume. Each profile consists of a hex code for color and a hex code for frequencies the fixture should respond to.
-const uint8_t targetFrameTimeMillis = 66;
+const uint8_t targetFrameTimeMs = 66;
 // MSGEQ7 Signal Data
 const uint8_t samplesPerRun = 16;       // number of consecutive samples to take whenever the audio is sampled (these are then averaged). Higher values inhibit random noise spikes.
 const uint16_t delayBetweenSamples = 1; // time in ms to wait between samples in a consecutive sample run. High values will decrease temporal resolution drastically.
@@ -89,7 +89,7 @@ void loop()
 
     // Select and Cycle Fixture Profiles
     FixtureProfile permutatedProfiles[fixtureAmount];
-    permutateProfiles(generatePermutationCode(cachedPermutationCode), profiles, permutatedProfiles, fixtureAmount);
+    permutateProfiles(generatePermutationCode(cachedPermutationCode, permutationCycleLengthMs), profiles, permutatedProfiles, fixtureAmount);
 
     // Manage Fixtures
     for (uint8_t fixtureId = 0; fixtureId < fixtureAmount; fixtureId++)
@@ -102,8 +102,8 @@ void loop()
     }
 
     // Wait until frame time is over
-    int16_t timeSinceFrameStart = targetFrameTimeMillis - (millis() - frameStartTime);
-    delay(max(timeSinceFrameStart, 0));
+    int16_t remainingFrameTimeMs = targetFrameTimeMs - (millis() - frameStartTime);
+    delay(max(remainingFrameTimeMs, 0));
 }
 
 /**
@@ -216,11 +216,21 @@ void permutateProfiles(uint64_t permutation, FixtureProfile *constProfiles, Fixt
     }
 }
 
-uint64_t generatePermutationCode(uint64_t &previousPermutationCode)
+/**
+ * @brief Generates a new permutation code of the fixture to profile mapping, based on the last permutation.
+ * Once the cycle length has been exceeded, the last permutation is cycled by one step,
+ * otherwise the method returns the provided permutation without modifications.
+ * This cycling is done to equally utilize LEDs over all fixture, preventing "burn in".
+ * 
+ * @param previousPermutationCode Reference to the previous permutation code.
+ * @param cycleLengthMs How long once permutation should last until shuffled.
+ * @return uint64_t The (modified) permutation.
+ */
+uint64_t generatePermutationCode(uint64_t &previousPermutationCode, uint16_t cycleLengthMs)
 {
     // if last permutation shift wasn't too long, return last permutation
     uint64_t timeNow = millis();
-    if (timeNow - lastPermutatedAtMs < permutationCycleLengthMs)
+    if (timeNow - lastPermutatedAtMs < cycleLengthMs)
         return previousPermutationCode;
 
     // shift last permutation
