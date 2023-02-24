@@ -1,6 +1,6 @@
 #ifndef DMXFixture_h
 #define DMXFixture_h
-#include "../Conceptinetics/Conceptinetics.h"
+#include <Conceptinetics.h>
 
 class DMXFixture
 {

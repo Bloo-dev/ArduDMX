@@ -1,5 +1,5 @@
 #include <AudioAnalyzer.h>
-#include <Conceptinetics.h>
+#include <LiquidCrystal_I2C.h>
 #include <DMXFixture.h>
 #include <NumericHistory.h>
 

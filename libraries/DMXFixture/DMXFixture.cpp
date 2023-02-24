@@ -1,4 +1,4 @@
-#include "../Conceptinetics/Conceptinetics.h"
+#include <Conceptinetics.h>
 #include "DMXFixture.h"
 
 DMXFixture::DMXFixture(uint16_t startChannel, uint8_t dimmerDefaultValue) : _redChannel(startChannel + localRedChannel - 1), _greenChannel(startChannel + localGreenChannel - 1), _blueChannel(startChannel + localBlueChannel - 1), _whiteChannel(startChannel + localWhiteChannel - 1), _dimmerChannel(startChannel + localDimmerChannel - 1), _strobeChannel(startChannel + localStrobeChannel - 1), _dimmerDefaultValue(dimmerDefaultValue)
