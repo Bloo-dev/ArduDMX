@@ -2,6 +2,10 @@
 #include <LiquidCrystal_I2C.h>
 #include <DMXFixture.h>
 #include <NumericHistory.h>
+#include <LatchedButton.h>
+
+// ===== GLOBAL SETTINGS ======
+const String firmwareDate = "2023-02-21";
 
 // ===== GLOBAL SETTINGS ======
 // Light Fixture Data
@@ -25,8 +29,11 @@ const uint16_t permutationCycleLengthMs = 5000;
 // DMX Hardware
 DMX_Master dmxMaster(fixtures[0].channelAmount *fixtureAmount, 2);
 // FFT Hardware
-Analyzer MSGEQ7 = Analyzer(6, 7, 0);
+Analyzer MSGEQ7(6, 7, 0);
 uint16_t frequencyAmplitudes[7]; // stores data from MSGEQ7 chip
+// LCD Hardware
+LiquidCrystal_I2C lcd(0x27, 16, 2); // TODO change to proper pin assignments, these are temporary
+LatchedButton selectButton(3, 4, 1000/targetFrameTimeMs); // TODO change to proper pin assignments, these are temporary
 // Auto Gain
 NumericHistory<uint16_t,64> amplitudeHistory = NumericHistory<uint16_t,64>();
 NumericHistory<uint16_t,64> clippingHistory = NumericHistory<uint16_t,64>();
@@ -40,6 +47,13 @@ uint16_t noiseLevel = 0;                      // lower bound for noise, determin
 
 void setup()
 {
+    // Start LCD
+    lcd.init();
+    lcd.backlight();
+    lcd.print("Firmware Date:"); // temp display commands
+    lcd.setCursor(0,1);
+    lcd.print(firmwareDate);
+
     // Start FFT
     MSGEQ7.Init();
 
