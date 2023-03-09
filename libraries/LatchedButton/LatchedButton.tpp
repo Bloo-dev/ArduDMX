@@ -1,12 +1,40 @@
 #include "LatchedButton.h"
 #include "Arduino.h"
 
-LatchedButtonUnit::LatchedButtonUnit(uint8_t readPin) : LatchedButtonUnit(readPin, 65536)
+/**
+ * @brief Construct a new LatchedButton<RESET_PIN>::LatchedButton object. The holdDelay is set to 65535, which is assumed to
+ * be unreachably high.
+ *
+ * @tparam RESET_PIN Pin used to reset the latch of the button. Note that this pin is automatically configured as an output
+ * and pulled high the first time a LatchedButton object is constructed.
+ * @param readPin Pin used to read the value of this button.
+ */
+template <uint8_t RESET_PIN>
+LatchedButton<RESET_PIN>::LatchedButton(uint8_t readPin) : LatchedButton(readPin, 65535)
 {
 }
 
-LatchedButtonUnit::LatchedButtonUnit(uint8_t readPin, uint16_t holdDelay) : _readPin(readPin), _holdDelay(holdDelay), _consecutivePressed(0)
+/**
+ * @brief Construct a new LatchedButton<RESET_PIN>::LatchedButton object.
+ *
+ * @tparam RESET_PIN Pin used to reset the latch of the button. Note that this pin is automatically configured as an output
+ * and pulled high the first time a LatchedButton object is constructed.
+ * @param readPin Pin used to read the value of this button.
+ * @param holdDelay Delay after "PRESSED" at which the press should be interpreted as "HELD". This delay is in units of queries
+ * to the buttons state; e.g. if holdDelay is set to 3 the button is interpreted as "HELD" after 3 successive calls of
+ * isPressed() determined the internal state of the button to be pressed, i.e. the state of the readPin is high for
+ * 3 consecutive calls of isPressed().
+ */
+template <uint8_t RESET_PIN>
+LatchedButton<RESET_PIN>::LatchedButton(uint8_t readPin, uint16_t holdDelay) : _readPin(readPin), _holdDelay(holdDelay), _consecutivePressed(0)
 {
+    if (!_resetPinInitialized)
+    {
+        pinMode(RESET_PIN, OUTPUT);
+        digitalWrite(RESET_PIN, HIGH);
+        _resetPinInitialized = true;
+    }
+
     pinMode(_readPin, INPUT);
 }
 
@@ -17,12 +45,15 @@ LatchedButtonUnit::LatchedButtonUnit(uint8_t readPin, uint16_t holdDelay) : _rea
  * For this, a holdDelay must be defined.
  * Note that (bool) of this return value is FALSE if the button is "NOT_PRESSED" and TRUE if the button is "PRESSED or "HELD".
  *
+ * @tparam RESET_PIN Pin used to reset the latch of the button. Note that this pin is automatically configured as an output
+ * and pulled high the first time a LatchedButton object is constructed.
  * @return uint8_t "NOT_PRESSED" (=0x0), "PRESSED" (=0x1), or "HELD" (=0x2), depending on the state of the latch:
  * - "PRESSED" (=0x1) is returned if the button was just pressed (i.e. if the button was not pressed before when the method was last called).
  * - "HELD" (=0x2) if the button was held down for at least _holdDelay queries.
  * - "NOT_PRESSED" (=0x0) otherwise. I.e. if the button is not pressed, or if the button is held down, but _holdDelay was not yet reached.
  */
-uint8_t LatchedButtonUnit::isPressed()
+template <uint8_t RESET_PIN>
+uint8_t LatchedButton<RESET_PIN>::isPressed()
 {
     bool currentState = digitalRead(_readPin);
 
@@ -46,68 +77,15 @@ uint8_t LatchedButtonUnit::isPressed()
     return NOT_PRESSED;
 }
 
-template <uint8_t SIZE>
-LatchedButtonGroup<SIZE>::LatchedButtonGroup(uint8_t resetPin, uint8_t *readPins, uint16_t *holdDelays) : _resetPin(resetPin)
+/**
+ * @brief Resets the latch of this LatchedButton and ALL LatchedButton instances that specify the same RESET_PIN.
+ *
+ * @tparam RESET_PIN Pin used to reset the latch of the button. Note that this pin is automatically configured as an output
+ * and pulled high the first time a LatchedButton object is constructed.
+ */
+template <uint8_t RESET_PIN>
+void LatchedButton<RESET_PIN>::resetLatch()
 {
-    initResetPin();
-    for (int index = 1; index < SIZE; index++)
-    {
-        _buttonUnits[index] = LatchedButtonUnit(readPins[index], holdDelays[index]);
-    }
-}
-
-template <uint8_t SIZE>
-LatchedButtonGroup<SIZE>::LatchedButtonGroup(uint8_t resetPin, uint8_t *readPins) : _resetPin(resetPin)
-{
-    initResetPin();
-    for (int index = 1; index < SIZE; index++)
-    {
-        _buttonUnits[index] = LatchedButtonUnit(readPins[index], 65535);
-    }
-}
-
-template <uint8_t SIZE>
-LatchedButtonGroup<SIZE>::LatchedButtonGroup(uint8_t resetPin, LatchedButtonUnit *buttonUnits) : _resetPin(resetPin), _buttonUnits(buttonUnits)
-{
-    pinMode(_resetPin, OUTPUT);
-    digitalWrite(_resetPin, HIGH);
-}
-
-template <uint8_t SIZE>
-uint8_t LatchedButtonGroup<SIZE>::isPressed(uint8_t index)
-{
-    return _buttonUnits[index].isPressed();
-}
-
-template <uint8_t SIZE>
-void LatchedButtonGroup<SIZE>::reset()
-{
-    digitalWrite(_resetPin, LOW);
-    digitalWrite(_resetPin, HIGH);
-}
-
-template <uint8_t SIZE>
-void LatchedButtonGroup<SIZE>::initResetPin()
-{
-    pinMode(_resetPin, OUTPUT);
-    digitalWrite(_resetPin, HIGH);
-}
-
-LatchedButton::LatchedButton(uint8_t resetPin, LatchedButtonUnit buttonUnit) : _buttonUnit(LatchedButtonGroup<1>(resetPin, (LatchedButtonUnit[1]){buttonUnit}))
-{
-}
-
-LatchedButton::LatchedButton(uint8_t resetPin, uint8_t readPin, uint16_t holdDelay) : LatchedButton(resetPin, LatchedButtonUnit(readPin, holdDelay))
-{
-}
-
-LatchedButton::LatchedButton(uint8_t resetPin, uint8_t readPin) : LatchedButton(resetPin, LatchedButtonUnit(readPin))
-{
-}
-
-LatchedButton::isPressed()
-{
-    uint8_t buttonState = _buttonUnit[0].isPressed();
-    _buttonUnit.reset();
-    return buttonState;
+    digitalWrite(RESET_PIN, LOW);
+    digitalWrite(RESET_PIN, HIGH);
 }

@@ -33,7 +33,10 @@ Analyzer MSGEQ7(6, 7, 0);
 uint16_t frequencyAmplitudes[7]; // stores data from MSGEQ7 chip
 // LCD Hardware
 LiquidCrystal_I2C lcd(0x27, 16, 2); // TODO change to proper pin assignments, these are temporary
-LatchedButton selectButton(3, 4, 1000/targetFrameTimeMs); // TODO change to proper pin assignments, these are temporary
+LatchedButton<9> plusButton(5, 1000/targetFrameTimeMs);
+LatchedButton<9> selectButton(6, 1000/targetFrameTimeMs);
+LatchedButton<9> minusButton(7, 1000/targetFrameTimeMs);
+LatchedButton<9> functionButton(8, 1000/targetFrameTimeMs);
 // Auto Gain
 NumericHistory<uint16_t,64> amplitudeHistory = NumericHistory<uint16_t,64>();
 NumericHistory<uint16_t,64> clippingHistory = NumericHistory<uint16_t,64>();
