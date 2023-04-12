@@ -5,11 +5,11 @@
 #include <LatchedButton.h>
 
 // ===== GLOBAL SETTINGS ======
-const String firmwareDate = "2023-02-21";
+const String firmwareDate = "2023-03-10";
 
 // ===== GLOBAL SETTINGS ======
 // Light Fixture Data
-const uint8_t maxBrightness = 217;                                                                                                                                                      // 85% max brightness to increase LED lifetime
+const uint8_t maxBrightness = 217; // 85% max brightness to increase LED lifetime
 DMXFixture fixtures[] = {DMXFixture(1, maxBrightness), DMXFixture(7, maxBrightness), DMXFixture(13, maxBrightness), DMXFixture(19, maxBrightness)};                                       // configured fixtures and their start channels. The maximum amount of supported fixtures is 16.
 const FixtureProfile profiles[] = {FixtureProfile(0xFF0000, 0x00000FF), FixtureProfile(0x0000FF, 0xFF00000), FixtureProfile(0xFF0000, 0x00000FF), FixtureProfile(0x00FF00, 0x0039000)};   // profiles that fixtures can assume. Each profile consists of a hex code for color and a hex code for frequencies the fixture should respond to.
 const uint8_t targetFrameTimeMs = 66;
@@ -32,11 +32,11 @@ DMX_Master dmxMaster(fixtures[0].channelAmount *fixtureAmount, 2);
 Analyzer MSGEQ7(6, 7, 0);
 uint16_t frequencyAmplitudes[7]; // stores data from MSGEQ7 chip
 // LCD Hardware
-LiquidCrystal_I2C lcd(0x27, 16, 2); // TODO change to proper pin assignments, these are temporary
-LatchedButton<9> plusButton(5, 1000/targetFrameTimeMs);
-LatchedButton<9> selectButton(6, 1000/targetFrameTimeMs);
-LatchedButton<9> minusButton(7, 1000/targetFrameTimeMs);
-LatchedButton<9> functionButton(8, 1000/targetFrameTimeMs);
+//LiquidCrystal_I2C lcd(0x27, 16, 2); // TODO change to proper pin assignments, these are temporary
+//LatchedButton<9> plusButton(5, 1000/targetFrameTimeMs);
+//LatchedButton<9> selectButton(6, 1000/targetFrameTimeMs);
+//LatchedButton<9> minusButton(7, 1000/targetFrameTimeMs);
+//LatchedButton<9> functionButton(8, 1000/targetFrameTimeMs);
 // Auto Gain
 NumericHistory<uint16_t,64> amplitudeHistory = NumericHistory<uint16_t,64>();
 NumericHistory<uint16_t,64> clippingHistory = NumericHistory<uint16_t,64>();
@@ -51,11 +51,11 @@ uint16_t noiseLevel = 0;                      // lower bound for noise, determin
 void setup()
 {
     // Start LCD
-    lcd.init();
-    lcd.backlight();
-    lcd.print("Firmware Date:"); // temp display commands
-    lcd.setCursor(0,1);
-    lcd.print(firmwareDate);
+    //lcd.init();
+    //lcd.backlight();
+    //lcd.print("Firmware Date:"); // temp display commands
+    //lcd.setCursor(0,1);
+    //lcd.print(firmwareDate);
 
     // Start FFT
     MSGEQ7.Init();
