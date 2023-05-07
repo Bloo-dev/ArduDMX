@@ -5,7 +5,7 @@
 #include <LatchedButton.h>
 
 // ===== GLOBAL SETTINGS ======
-const String firmwareDate = "2023-03-10";
+const String firmwareDate = "2023-05-07";
 
 // ===== GLOBAL SETTINGS ======
 // Light Fixture Data
@@ -29,14 +29,14 @@ const uint16_t permutationCycleLengthMs = 5000;
 // DMX Hardware
 DMX_Master dmxMaster(fixtures[0].channelAmount *fixtureAmount, 2);
 // FFT Hardware
-Analyzer MSGEQ7(6, 7, 0);
+Analyzer MSGEQ7(7, 4, 0);
 uint16_t frequencyAmplitudes[7]; // stores data from MSGEQ7 chip
 // LCD Hardware
-//LiquidCrystal_I2C lcd(0x27, 16, 2); // TODO change to proper pin assignments, these are temporary
-//LatchedButton<9> plusButton(5, 1000/targetFrameTimeMs);
-//LatchedButton<9> selectButton(6, 1000/targetFrameTimeMs);
-//LatchedButton<9> minusButton(7, 1000/targetFrameTimeMs);
-//LatchedButton<9> functionButton(8, 1000/targetFrameTimeMs);
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+LatchedButton<8> plusButton(3, 1000/targetFrameTimeMs);
+LatchedButton<8> selectButton(5, 1000/targetFrameTimeMs);
+LatchedButton<8> minusButton(6, 1000/targetFrameTimeMs);
+LatchedButton<8> functionButton(9, 1000/targetFrameTimeMs);
 // Auto Gain
 NumericHistory<uint16_t,64> amplitudeHistory = NumericHistory<uint16_t,64>();
 NumericHistory<uint16_t,64> clippingHistory = NumericHistory<uint16_t,64>();
