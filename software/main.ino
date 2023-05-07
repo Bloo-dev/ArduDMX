@@ -5,9 +5,6 @@
 #include <LatchedButton.h>
 
 // ===== GLOBAL SETTINGS ======
-const String firmwareDate = "2023-05-07";
-
-// ===== GLOBAL SETTINGS ======
 // Light Fixture Data
 const uint8_t maxBrightness = 217; // 85% max brightness to increase LED lifetime
 DMXFixture fixtures[] = {DMXFixture(1, maxBrightness), DMXFixture(7, maxBrightness), DMXFixture(13, maxBrightness), DMXFixture(19, maxBrightness)};                                       // configured fixtures and their start channels. The maximum amount of supported fixtures is 16.
@@ -51,16 +48,21 @@ uint16_t noiseLevel = 0;                      // lower bound for noise, determin
 void setup()
 {
     // Start LCD
-    //lcd.init();
-    //lcd.backlight();
-    //lcd.print("Firmware Date:"); // temp display commands
-    //lcd.setCursor(0,1);
-    //lcd.print(firmwareDate);
+    lcd.init();
+    lcd.backlight();
+    lcd.print("    arduDMX     ");
+    lcd.setCursor(0,1);
+    lcd.print(" ver 2023-05-07 ");
+    delay(1000);
 
     // Start FFT
+    lcd.setCursor(0, 1);
+    lcd.print("Starting FFT...");
     MSGEQ7.Init();
 
     // Start DMX
+    lcd.setCursor(0, 1);
+    lcd.print("Starting DMX...");
     dmxMaster.setAutoBreakMode();
     dmxMaster.enable();
 
@@ -75,17 +77,22 @@ void setup()
     lastPermutatedAtMs = 0;
 
     // Analyze Noise Levels (THERE MUST NOT BE AUDIO ON THE JACK FOR THIS TO WORK)
+    lcd.setCursor(0, 1);
+    lcd.print("Probing Noise...");
     int noiseData[] = {0, 0, 0, 0, 0, 0, 0};
     sampleMSGEQ7(32, 1, noiseData);
     noiseLevel = getAverage(noiseData, 7, 12); // average over all frequencies and add some extra buffer
 
+    lcd.setCursor(0, 1);
+    lcd.print("Setup Complete! ");
     delay(500); // wait a bit for everything to stabalize
+    lcd.clear();
 }
 
 void loop()
 {
     // Store frame start time
-    uint64_t frameStartTime = millis();
+    uint32_t frameStartTime = millis();
 
     // Get FFT data from MSGEQ7 chip
     sampleMSGEQ7(samplesPerRun, delayBetweenSamples, frequencyAmplitudes);
@@ -119,7 +126,10 @@ void loop()
     }
 
     // Wait until frame time is over
-    int16_t remainingFrameTimeMs = targetFrameTimeMs - (millis() - frameStartTime);
+    uint32_t passedFrameTime = millis() - frameStartTime;
+    int16_t remainingFrameTimeMs = targetFrameTimeMs - passedFrameTime;
+    lcd.setCursor(0, 0);
+    lcd.print((int) passedFrameTime);
     delay(max(remainingFrameTimeMs, 0));
 }
 
