@@ -3,8 +3,8 @@
 Analyzer FFT1(7, 4, 0); // MSGEQ7 on Mono|Left channel
 Analyzer FFT2(7, 4, 1); // MSGEQ7 on Blank|Right channel
 
-uint16_t amplitudesLeft[];
-uint16_t amplitudesRight[];
+uint16_t amplitudesLeft[7];
+uint16_t amplitudesRight[7];
 
 void setup()
 {
@@ -22,7 +22,7 @@ void loop()
     for (int band = 0; band < 7; band++)
     {
         Serial.print(amplitudesLeft[band]);
-        Serial.print(",")
+        Serial.print(",");
         Serial.print(amplitudesRight[band]);
         if (band < 6)
             Serial.print(",");
