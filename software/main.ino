@@ -11,7 +11,7 @@ DMXFixture fixtures[] = {DMXFixture(1, maxBrightness), DMXFixture(7, maxBrightne
 const FixtureProfile profiles[] = {FixtureProfile(0xFF0000, 0x00000FF), FixtureProfile(0x0000FF, 0xFF00000), FixtureProfile(0xFF0000, 0x00000FF), FixtureProfile(0x00FF00, 0x0039000)};   // profiles that fixtures can assume. Each profile consists of a hex code for color and a hex code for frequencies the fixture should respond to.
 const uint8_t targetFrameTimeMs = 66;
 // MSGEQ7 Signal Data
-const uint8_t samplesPerRun = 16;       // number of consecutive samples to take whenever the audio is sampled (these are then averaged). Higher values inhibit random noise spikes.
+const uint8_t samplesPerRun = 1;//temp changed to 1 to see if results are better, was 16;       // number of consecutive samples to take whenever the audio is sampled (these are then averaged). Higher values inhibit random noise spikes.
 const uint16_t delayBetweenSamples = 1; // time in ms to wait between samples in a consecutive sample run. High values will decrease temporal resolution drastically.
 //  =============================
 
@@ -114,6 +114,34 @@ void loop()
     // Select and Cycle Fixture Profiles
     FixtureProfile permutatedProfiles[fixtureAmount];
     permutateProfiles(generatePermutationCode(cachedPermutationCode, permutationCycleLengthMs), profiles, permutatedProfiles, fixtureAmount);
+
+    // TODO remove this. Temp button test.
+    if (functionButton.isPressed() == 1)
+    {
+        lcd.display();
+    }
+
+    if (functionButton.isPressed() == 2)
+    {
+        lcd.noDisplay();
+    }
+
+    if (selectButton.isPressed() == 1)
+    {
+        for (uint8_t fixtureId = 0; fixtureId < fixtureAmount; fixtureId++)
+        {
+            fixtures[fixtureId].setWhite(0);
+        }
+    }
+
+    if (selectButton.isPressed() == 2)
+    {
+        for (uint8_t fixtureId = 0; fixtureId < fixtureAmount; fixtureId++)
+        {
+            fixtures[fixtureId].setWhite(255);
+        }
+    }
+    LatchedButton<8>::resetLatch();
 
     // Manage Fixtures
     for (uint8_t fixtureId = 0; fixtureId < fixtureAmount; fixtureId++)
