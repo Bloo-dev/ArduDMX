@@ -284,7 +284,10 @@ template <uint8_t PAGE_AMOUNT>
 void SettingsDisplay<PAGE_AMOUNT>::input(uint8_t buttonCode, bool alternateAction)
 {
     // update screen saver timestamp
-    setScreenSaverTimestamp(SCREEN_SAVER_OFFSET);
+    if (setScreenSaverTimestamp(SCREEN_SAVER_OFFSET))
+    {
+        return; // if the screen saver was active, absorb the button press
+    }
 
     // check if the page handles the pressed button
     if (_pages[_currentPageIndex].isSelected()) // check if page is in edit mode, if so, let the page check if it overwrites the pressed button
@@ -426,15 +429,19 @@ void SettingsDisplay<PAGE_AMOUNT>::refreshValue()
 }
 
 template <uint8_t PAGE_AMOUNT>
-void SettingsDisplay<PAGE_AMOUNT>::setScreenSaverTimestamp(uint16_t offset)
+bool SettingsDisplay<PAGE_AMOUNT>::setScreenSaverTimestamp(uint16_t offset)
 {
+    // store new target time for turning on the screen saver again
+    _screenSaverTurnOnTimestamp = millis() + offset;
+
     if (_screenSaverOn)
     {
         // turn off screen saver if it was on
         _screen.display();
         _screenSaverOn = false;
+
+        return true;
     }
 
-    // store new target time for turning on the screen saver again
-    _screenSaverTurnOnTimestamp = millis() + offset;
+    return false;
 }

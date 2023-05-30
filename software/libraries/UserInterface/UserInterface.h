@@ -267,8 +267,10 @@ private:
      * Disables the screen saver if it is turned on.
      *
      * @param offset milliscond offset from the current time.
+     * @return true If the screen saver was active when this function was called.
+     * @return false If the screen saver was inactive when this function was called.
      */
-    void setScreenSaverTimestamp(uint16_t offset);
+    bool setScreenSaverTimestamp(uint16_t offset);
 };
 
 #include "UserInterface.tpp"
