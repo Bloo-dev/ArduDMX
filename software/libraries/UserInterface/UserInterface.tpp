@@ -108,18 +108,27 @@ bool SettingsPage::isSelected()
 
 void SettingsPage::select()
 {
+    if(isSelected())
+        return;
+
     _linkedVariableEditBuffer = (*_linkedVariablePtr); // init buffer to value of linked variable
     _state = _state | 0b1000;
 }
 
 void SettingsPage::deselectDiscard()
 {
+    if(!isSelected())
+        return;
+
     _linkedVariableEditBuffer = (*_linkedVariablePtr); // overwrite linked variable buffer with actual variable value
     _state = _state & 0b0111;
 }
 
 void SettingsPage::deselectSave()
 {
+    if (!isSelected())
+        return;
+
     (*_linkedVariablePtr) = _linkedVariableEditBuffer; // overwrite linked variable buffer with actual variable value
     _state = _state & 0b0111;
 }
@@ -253,7 +262,7 @@ SettingsPage SettingsPageFactory::finalize()
 // ======== ======== ======== ========
 
 template <uint8_t PAGE_AMOUNT>
-SettingsDisplay<PAGE_AMOUNT>::SettingsDisplay(SettingsPage *pages) : _currentPageIndex(0), _quickSettingFunction(0), _hasQuickSettingFunction(false), _screen(0, 0, 0), _screenInitialized(false)
+SettingsDisplay<PAGE_AMOUNT>::SettingsDisplay(SettingsPage *pages) : _currentPageIndex(0), _quickSettingFunction(0), _hasQuickSettingFunction(false), _screen(0, 0, 0), _screenInitialized(false), _screenSaverTurnOnTimestamp(0), _screenSaverOn(false)
 {
     for (int i = 0; i < PAGE_AMOUNT; i++)
     {
@@ -267,12 +276,16 @@ void SettingsDisplay<PAGE_AMOUNT>::initializeDisplay(uint8_t screenAddress)
     _screen = LiquidCrystal_I2C(screenAddress, 16, 2);
     _screen.init();
     _screen.clear();
+    setScreenSaverTimestamp(2 * SCREEN_SAVER_OFFSET);
     refreshAll();
 }
 
 template <uint8_t PAGE_AMOUNT>
 void SettingsDisplay<PAGE_AMOUNT>::input(uint8_t buttonCode, bool alternateAction)
 {
+    // update screen saver timestamp
+    setScreenSaverTimestamp(SCREEN_SAVER_OFFSET);
+
     // check if the page handles the pressed button
     if (_pages[_currentPageIndex].isSelected()) // check if page is in edit mode, if so, let the page check if it overwrites the pressed button
     {
@@ -334,6 +347,25 @@ void SettingsDisplay<PAGE_AMOUNT>::setQuickSettingFunction(void (*quickSettingFu
 }
 
 template <uint8_t PAGE_AMOUNT>
+void SettingsDisplay<PAGE_AMOUNT>::checkScreenSaver()
+{ // TODO use this function to also update linked variables on the current page from their source (-> will be useful for FPS display)
+    if (_screenSaverOn) // return if the screen saver is already on
+        return;
+
+    if (_screenSaverTurnOnTimestamp > millis()) // return if the screen saver shouldnt be turned on yet
+    {
+        Serial.print("Turn on screen saver in: ");
+        Serial.println(_screenSaverTurnOnTimestamp - millis());
+        return;
+    }
+
+    // turn on screen saver, also discard any pending changes
+    _screen.noDisplay();
+    deselectPage(true);
+    _screenSaverOn = true;
+}
+
+template <uint8_t PAGE_AMOUNT>
 void SettingsDisplay<PAGE_AMOUNT>::selectPage()
 {
     _pages[_currentPageIndex].select();
@@ -391,4 +423,18 @@ void SettingsDisplay<PAGE_AMOUNT>::refreshValue()
 {
     _screen.setCursor(DISPLAY_WIDTH - (VALUE_DISPLAY_WIDTH + 1), 0); // -1 is from unit symbol, which is one character
     _screen.print(_pages[_currentPageIndex].getRenderedValue());
+}
+
+template <uint8_t PAGE_AMOUNT>
+void SettingsDisplay<PAGE_AMOUNT>::setScreenSaverTimestamp(uint16_t offset)
+{
+    if (_screenSaverOn)
+    {
+        // turn off screen saver if it was on
+        _screen.display();
+        _screenSaverOn = false;
+    }
+
+    // store new target time for turning on the screen saver again
+    _screenSaverTurnOnTimestamp = millis() + offset;
 }

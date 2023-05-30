@@ -1,9 +1,11 @@
 #ifndef UserInterface_h
 #define UserInterface_h
 #include <LiquidCrystal_I2C.h>
+#include "Arduino.h"
 
 #define DISPLAY_WIDTH 16
 #define DISPLAY_HEIGHT 2
+#define SCREEN_SAVER_OFFSET 15000
 #define VALUE_DISPLAY_WIDTH 5
 #define UNIT_DISPLAY_WIDTH 1
 
@@ -217,6 +219,13 @@ public:
      */
     void setQuickSettingFunction(void (*quickSettingFunction)(bool));
 
+    /**
+     * @brief Enables the screen saver (turns of the display) if the internal screen saver timeout has passed.
+     * Call this function regularly (at least every 7500ms) to enable the screen saver feature.
+     * Not calling this function will effectively disable the screen saver.
+     */
+    void checkScreenSaver();
+
 private:
     // Array of pages held by this SettingsDisplay.
     SettingsPage _pages[PAGE_AMOUNT];
@@ -228,6 +237,8 @@ private:
     // Connected screen
     LiquidCrystal_I2C _screen;
     bool _screenInitialized;
+    uint32_t _screenSaverTurnOnTimestamp;
+    bool _screenSaverOn;
 
     /**
      * @brief Refreshes the full image on the screen. Segments being refreshed will flicker shortly.
@@ -250,6 +261,14 @@ private:
      * @param discardChanges 'true' if any changes made should be discarded. 'false' if the changes should be saved.
      */
     void deselectPage(bool discardChanges);
+
+    /**
+     * @brief Sets a new timestamp for the screen save to turn on on.
+     * Disables the screen saver if it is turned on.
+     *
+     * @param offset milliscond offset from the current time.
+     */
+    void setScreenSaverTimestamp(uint16_t offset);
 };
 
 #include "UserInterface.tpp"
