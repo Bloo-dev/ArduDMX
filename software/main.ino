@@ -1,8 +1,8 @@
 #include <AudioAnalyzer.h>
-#include <LiquidCrystal_I2C.h>
 #include <DMXFixture.h>
 #include <NumericHistory.h>
 #include <LatchedButton.h>
+#include <UserInterface.h>
 
 // ===== GLOBAL SETTINGS ======
 // Light Fixture Data
@@ -28,8 +28,11 @@ DMX_Master dmxMaster(fixtures[0].channelAmount *fixtureAmount, 2);
 // FFT Hardware
 Analyzer MSGEQ7(7, 4, 0);
 uint16_t frequencyAmplitudes[7]; // stores data from MSGEQ7 chip
-// LCD Hardware
-LiquidCrystal_I2C lcd(0x27, 16, 2);
+// User Interface Hardware
+uint8_t whiteLightSetting = 0;
+uint8_t msPerFrameMonitor = 0;
+SettingsPage pages[] = {SettingsPageFactory("Lights", &whiteLightSetting).setLinkedVariableLimits(0, 3).setDisplayAlias("  BARTABLE  ALL").finalize(), SettingsPageFactory("Frame ms", &msPerFrameMonitor).makeMonitor().finalize()};
+SettingsDisplay<2> userInterface(pages);
 LatchedButton<8> plusButton(3, 1000/targetFrameTimeMs);
 LatchedButton<8> selectButton(5, 1000/targetFrameTimeMs);
 LatchedButton<8> minusButton(6, 1000/targetFrameTimeMs);
@@ -48,21 +51,16 @@ uint16_t noiseLevel = 0;                      // lower bound for noise, determin
 void setup()
 {
     // Start LCD
-    lcd.init();
-    lcd.backlight();
-    lcd.print("    arduDMX     ");
-    lcd.setCursor(0,1);
-    lcd.print(" ver 2023-05-07 ");
+    userInterface.initializeDisplay(0x27);
+    userInterface.print("    arduDMX     ", " ver 2023-05-31 ");
     delay(1000);
 
     // Start FFT
-    lcd.setCursor(0, 1);
-    lcd.print("Starting FFT...");
+    userInterface.print("    Starting    ", "Audio Analyzer..");
     MSGEQ7.Init();
 
     // Start DMX
-    lcd.setCursor(0, 1);
-    lcd.print("Starting DMX...");
+    userInterface.print("    Starting    ", "DMX Controller..");
     dmxMaster.setAutoBreakMode();
     dmxMaster.enable();
 
@@ -77,16 +75,14 @@ void setup()
     lastPermutatedAtMs = 0;
 
     // Analyze Noise Levels (THERE MUST NOT BE AUDIO ON THE JACK FOR THIS TO WORK)
-    lcd.setCursor(0, 1);
-    lcd.print("Probing Noise...");
+    userInterface.print("    Probing     ", "     Noise...    ");
     int noiseData[] = {0, 0, 0, 0, 0, 0, 0};
     sampleMSGEQ7(32, 1, noiseData);
     noiseLevel = getAverage(noiseData, 7, 12); // average over all frequencies and add some extra buffer
 
-    lcd.setCursor(0, 1);
-    lcd.print("Setup Complete! ");
+    userInterface.print("     Setup      ", "   Complete!    ");
     delay(500); // wait a bit for everything to stabalize
-    lcd.clear();
+    userInterface.showPages();
 }
 
 void loop()
@@ -115,34 +111,6 @@ void loop()
     FixtureProfile permutatedProfiles[fixtureAmount];
     permutateProfiles(generatePermutationCode(cachedPermutationCode, permutationCycleLengthMs), profiles, permutatedProfiles, fixtureAmount);
 
-    // TODO remove this. Temp button test.
-    if (functionButton.isPressed() == 1)
-    {
-        lcd.display();
-    }
-
-    if (functionButton.isPressed() == 2)
-    {
-        lcd.noDisplay();
-    }
-
-    if (selectButton.isPressed() == 1)
-    {
-        for (uint8_t fixtureId = 0; fixtureId < fixtureAmount; fixtureId++)
-        {
-            fixtures[fixtureId].setWhite(0);
-        }
-    }
-
-    if (selectButton.isPressed() == 2)
-    {
-        for (uint8_t fixtureId = 0; fixtureId < fixtureAmount; fixtureId++)
-        {
-            fixtures[fixtureId].setWhite(255);
-        }
-    }
-    LatchedButton<8>::resetLatch();
-
     // Manage Fixtures
     for (uint8_t fixtureId = 0; fixtureId < fixtureAmount; fixtureId++)
     {
@@ -153,11 +121,33 @@ void loop()
         fixtures[fixtureId].display(dmxMaster);
     }
 
+    // user interface keep alive
+    if (plusButton.isPressed())
+    {
+        userInterface.input(3, false);
+    }
+
+    if (minusButton.isPressed())
+    {
+        userInterface.input(1, false);
+    }
+
+    if (selectButton.isPressed())
+    {
+        userInterface.input(2, false);
+    }
+
+    if (functionButton.isPressed())
+    {
+        userInterface.input(0, false);
+    }
+    LatchedButton<8>::resetLatch();
+    userInterface.checkScreenSaver();
+    userInterface.updateMonitor();
+
     // Wait until frame time is over
-    uint32_t passedFrameTime = millis() - frameStartTime;
-    int16_t remainingFrameTimeMs = targetFrameTimeMs - passedFrameTime;
-    lcd.setCursor(0, 0);
-    lcd.print((int) passedFrameTime);
+    msPerFrameMonitor = millis() - frameStartTime;
+    int16_t remainingFrameTimeMs = targetFrameTimeMs - msPerFrameMonitor;
     delay(max(remainingFrameTimeMs, 0));
 }
 
