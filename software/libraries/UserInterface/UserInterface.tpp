@@ -5,11 +5,11 @@
 //
 // ======== ======== ======== ========
 
-SettingsPage::SettingsPage() : _state(0), _settingName(""), _footer(""), _buttonOverwriteMask(0), _linkedVariablePtr(0), _linkedVariableEditBuffer(0), _linkedVariableMin(0), _linkedVariableMax(255), _unitSymbol(' '), _aliasList("")
+SettingsPage::SettingsPage() : _state(0), _settingName(""), _footer(""), _linkedVariablePtr(0), _linkedVariableEditBuffer(0), _linkedVariableMin(0), _linkedVariableMax(255), _unitSymbol(' '), _aliasList("")
 {
 }
 
-SettingsPage::SettingsPage(uint8_t state, String settingName, uint8_t buttonOverwriteMask, uint8_t *linkedVarPtr, uint8_t linkedVarMin, uint8_t linkedVarMax, char unitSymbol, String aliasList) : _state(state), _buttonOverwriteMask(buttonOverwriteMask), _linkedVariablePtr(linkedVarPtr), _linkedVariableEditBuffer(0), _linkedVariableMin(linkedVarMin), _linkedVariableMax(linkedVarMax), _unitSymbol(unitSymbol), _aliasList(aliasList)
+SettingsPage::SettingsPage(uint8_t state, String settingName, uint8_t *linkedVariablePtr, uint8_t linkedVarMin, uint8_t linkedVarMax, char unitSymbol, String aliasList) : _state(state), _linkedVariablePtr(linkedVariablePtr), _linkedVariableEditBuffer(0), _linkedVariableMin(linkedVarMin), _linkedVariableMax(linkedVarMax), _unitSymbol(unitSymbol), _aliasList(aliasList)
 {
     // Precompute setting name displayed in header. Format: 'Example Sett.: '
     // Calculate how much space is available for the settingName
@@ -28,100 +28,63 @@ SettingsPage::SettingsPage(uint8_t state, String settingName, uint8_t buttonOver
     _settingName += settingName + _SYMBOL_SEPARATOR;
 
     // Precompute footer (full 2nd line of the screen)
-    String buttonFooters[4];
-    for (uint8_t buttonCode = 0; buttonCode < 4; buttonCode++) // collect button actions
+    _footer = String("");
+    if (minusButtonDisabled())
     {
-        uint8_t buttonAction = (_buttonOverwriteMask >> (2 * buttonCode)) & 0b11;
-        if (buttonAction & 0b01)
-        {
-            if (buttonAction & 0b10)
-            {
-                // buttonAction 0b11 (increase linked variable)
-                buttonFooters[buttonCode] = _SYMBOL_PLUS;
-            }
-            else
-            {
-                // buttonAction 0b01 (decrease linked variable)
-                buttonFooters[buttonCode] = _SYMBOL_MINUS;
-            }
-        }
-        else
-        {
-            if (buttonAction & 0b10)
-            {
-                // buttonAction 0b10 (restore default for linked variable (unimplemented))
-                buttonFooters[buttonCode] = _SYMBOL_SPACE;
-            }
-            else
-            {
-                // buttonAction 0b00 (button not overwritten)
-                if (buttonCode & 0b01)
-                {
-                    if (buttonCode & 0b10)
-                    {
-                        // buttonCode 0b11 = 3 "plus"
-                        buttonFooters[buttonCode] = _SYMBOL_ARROW_RIGHT;
-                    }
-                    else
-                    {
-                        // buttonCode 0b01 = 1 "minus"
-                        buttonFooters[buttonCode] = _SYMBOL_ARROW_LEFT;
-                    }
-                }
-                else
-                {
-                    if (buttonCode & 0b10)
-                    {
-                        // buttonCode 0b10 = 2 "select"
-                        buttonFooters[buttonCode] = _SYMBOL_SAVE;
-                    }
-                    else
-                    {
-                        // buttonCode 0b00 = 0 "function"
-                        if (_state & 0b00000100) // if immediate changes are on, display SAVE, otherwise display BACK
-                        {
-                            buttonFooters[buttonCode] = _SYMBOL_SAVE;
-                        }
-                        else
-                        {
-                            buttonFooters[buttonCode] = _SYMBOL_BACK;
-                        }
-                    }
-                }
-            }
-        }
+        _footer += _SYMBOL_SPACE;
+    }
+    else
+    {
+        _footer += _SYMBOL_MINUS;
     }
 
-    // compose footer
-    _footer = buttonFooters[1] + _SYMBOL_SPACE + buttonFooters[2] + _SYMBOL_SPACE + buttonFooters[3];
-    while (_footer.length() + buttonFooters[0].length() < DISPLAY_WIDTH)
+    _footer += _SYMBOL_SPACE + _SYMBOL_SAVE + _SYMBOL_SPACE;
+
+    if (plusButtonDisabled())
+    {
+        _footer += _SYMBOL_SPACE;
+    }
+    else
+    {
+        _footer += _SYMBOL_PLUS;
+    }
+
+    while (_footer.length() + _SYMBOL_BACK.length() < DISPLAY_WIDTH)
     {
         _footer = _SYMBOL_SPACE + _footer;
     }
-    _footer = buttonFooters[0] + _footer;
+    _footer = _SYMBOL_BACK + _footer;
 }
 
 bool SettingsPage::isSelected()
 {
-    return _state & 0b1000;
+    return _state & 0b001000;
 }
 
 void SettingsPage::select()
 {
-    if(isSelected())
+    if (isSelected())
         return;
 
     _linkedVariableEditBuffer = (*_linkedVariablePtr); // init buffer to value of linked variable
-    _state = _state | 0b1000;
+    _state = _state | 0b001000;
 }
 
 void SettingsPage::deselectDiscard()
 {
-    if(!isSelected())
+    if (!isSelected())
         return;
 
-    _linkedVariableEditBuffer = (*_linkedVariablePtr); // overwrite linked variable buffer with actual variable value
-    _state = _state & 0b0111;
+    if (hasChangePreviewsEnabled())
+    {
+        (*_linkedVariablePtr) = _linkedVariableEditBuffer; // if change previews are on, restore linked variable to value stored in buffer
+    }
+    else
+    {
+        _linkedVariableEditBuffer = (*_linkedVariablePtr); // if change previews are off, reset buffer to value of linked variable (important for rendering)
+    }
+
+    _state = _state & 0b110111;
 }
 
 void SettingsPage::deselectSave()
@@ -129,43 +92,74 @@ void SettingsPage::deselectSave()
     if (!isSelected())
         return;
 
-    (*_linkedVariablePtr) = _linkedVariableEditBuffer; // overwrite linked variable buffer with actual variable value
-    _state = _state & 0b0111;
-}
-
-bool SettingsPage::handleButton(uint8_t buttonCode)
-{
-    uint8_t buttonAction = (_buttonOverwriteMask & (0b11 << 2 * buttonCode)) >> (2 * buttonCode);
-    if (!buttonAction) // if buttonAction is 0b00, then the page does not actually overwrite the button
+    if (hasChangePreviewsEnabled())
     {
-        return false; // hand back control to the display
-    }
-
-    // page actually overwrites the pressed button. Perform the assigned action.
-    if (buttonAction & 0b01)
-    {
-        if (buttonAction & 0b10)
-        {
-            // buttonAction 0b11 (increase linked variable)
-            _linkedVariableEditBuffer = (((_linkedVariableEditBuffer - _linkedVariableMin) + 1) % _linkedVariableMax) + _linkedVariableMin;
-        }
-        else
-        {
-            // buttonAction 0b01 (decrease linked variable)
-            _linkedVariableEditBuffer = (((_linkedVariableEditBuffer - _linkedVariableMin) + (_linkedVariableMax - 1)) % _linkedVariableMax) + _linkedVariableMin;
-        }
-
-        if (_state & 0b0100) // check if changes should apply immediately
-        {
-            (*_linkedVariablePtr) = _linkedVariableEditBuffer;
-        }
+        _linkedVariableEditBuffer = (*_linkedVariablePtr); // if change previews are on, set buffer to value of linked variable (important for rendering)
     }
     else
     {
-        // buttonAction 0b10 (restore default value)
-        // TODO unimplemented
+        (*_linkedVariablePtr) = _linkedVariableEditBuffer; // if change previews are off, store edited value to linked variable
     }
-    return true;
+
+    _state = _state & 0b110111;
+}
+
+bool SettingsPage::hasChangePreviewsEnabled()
+{
+    return _state & 0b000100;
+}
+
+bool SettingsPage::isMonitor()
+{
+    return _state & 0b000001;
+}
+
+void SettingsPage::storeValue(uint8_t value)
+{
+    if (hasChangePreviewsEnabled())
+    {
+        (*_linkedVariablePtr) = value;
+    }
+    else
+    {
+        _linkedVariableEditBuffer = value;
+    }
+}
+
+uint8_t SettingsPage::loadValue()
+{
+    if (hasChangePreviewsEnabled())
+    {
+        return (*_linkedVariablePtr);
+    }
+    else
+    {
+        return _linkedVariableEditBuffer;
+    }
+}
+
+void SettingsPage::minusButton()
+{
+    if (minusButtonDisabled()) // if the button is marked as disabled, return
+        return;
+    storeValue((((loadValue() - _linkedVariableMin) + (_linkedVariableMax - 1)) % _linkedVariableMax) + _linkedVariableMin);
+}
+
+bool SettingsPage::minusButtonDisabled()
+{
+    return _state & 0b100000;
+}
+
+void SettingsPage::plusButton()
+{
+    if (plusButtonDisabled()) // if the button is marked as disabled, return
+        return;
+    storeValue((((loadValue() - _linkedVariableMin) + 1) % _linkedVariableMax) + _linkedVariableMin);
+}
+
+bool SettingsPage::plusButtonDisabled()
+{
+    return _state & 0b010000;
 }
 
 String SettingsPage::getRenderedHeader()
@@ -181,14 +175,14 @@ String SettingsPage::getRenderedFooter()
 String SettingsPage::getRenderedValue()
 {
     String linkedVariableValue;
-    if (_state & 0b10) // use alias instead of raw values
+    if (_state & 0b000010) // use alias instead of raw values
     {
-        uint8_t aliasIndex = (_linkedVariableEditBuffer % (_aliasList.length() / VALUE_DISPLAY_WIDTH)) * VALUE_DISPLAY_WIDTH;
+        uint8_t aliasIndex = (loadValue() % (_aliasList.length() / VALUE_DISPLAY_WIDTH)) * VALUE_DISPLAY_WIDTH;
         linkedVariableValue = _aliasList.substring(aliasIndex, aliasIndex + VALUE_DISPLAY_WIDTH);
     }
     else // use raw values
     {
-        linkedVariableValue = String(_linkedVariableEditBuffer);
+        linkedVariableValue = String(loadValue());
     }
 
     while (linkedVariableValue.length() < VALUE_DISPLAY_WIDTH) // add left whitespace padding if there is enough space
@@ -205,8 +199,25 @@ String SettingsPage::getRenderedValue()
 //
 // ======== ======== ======== ========
 
-SettingsPageFactory::SettingsPageFactory(String settingName, uint8_t buttonOverwriteMask, uint8_t *linkedVariablePtr) : _settingName(settingName), _buttonOverwriteMask(buttonOverwriteMask), _linkedVariablePtr(linkedVariablePtr), _state(0), _linkedVariableMin(0), _linkedVariableMax(255), _unitSymbol(' '), _aliasList("")
+SettingsPageFactory::SettingsPageFactory(String settingName, uint8_t *linkedVariablePtr) : _settingName(settingName), _linkedVariablePtr(linkedVariablePtr), _state(0), _linkedVariableMin(0), _linkedVariableMax(255), _unitSymbol(' '), _aliasList("")
 {
+}
+
+SettingsPage SettingsPageFactory::finalize()
+{
+    return SettingsPage(_state, _settingName, _linkedVariablePtr, _linkedVariableMin, _linkedVariableMax, _unitSymbol, _aliasList);
+}
+
+SettingsPageFactory SettingsPageFactory::disableMinusButton()
+{
+    _state = _state | 0b100000;
+    return *this;
+}
+
+SettingsPageFactory SettingsPageFactory::disablePlusButton()
+{
+    _state = _state | 0b010000;
+    return *this;
 }
 
 SettingsPageFactory SettingsPageFactory::setLinkedVariableLimits(uint8_t min, uint8_t max)
@@ -216,42 +227,30 @@ SettingsPageFactory SettingsPageFactory::setLinkedVariableLimits(uint8_t min, ui
     return *this;
 }
 
-SettingsPageFactory SettingsPageFactory::setImmediateChanges(bool immediateChanges)
-{
-    if (immediateChanges)
-    {
-        _state = _state | 0b00000100;
-    }
-    else
-    {
-        _state = _state & 0b11111011;
-    }
-    return *this;
-}
-
 SettingsPageFactory SettingsPageFactory::setLinkedVariableUnits(char unitSymbol)
 {
     _unitSymbol = unitSymbol;
     return *this;
 }
 
-SettingsPageFactory SettingsPageFactory::setDisplayAlias(String aliasList)
+SettingsPageFactory SettingsPageFactory::enableChangePreviews()
 {
-    if (aliasList.length() == 0)
-    {
-        _state = _state | 0b11111101;
-    }
-    else
-    {
-        _state = _state | 0b00000010;
-    }
-    _aliasList = aliasList;
+    _state = _state | 0b00000100;
     return *this;
 }
 
-SettingsPage SettingsPageFactory::finalize()
+SettingsPageFactory SettingsPageFactory::makeMonitor()
 {
-    return SettingsPage(_state, _settingName, _buttonOverwriteMask, _linkedVariablePtr, _linkedVariableMin, _linkedVariableMax, _unitSymbol, _aliasList);
+    enableChangePreviews();
+    _state = _state | 0b00000001;
+    return *this;
+}
+
+SettingsPageFactory SettingsPageFactory::setDisplayAlias(String aliasList)
+{
+    _state = _state | 0b00000010;
+    _aliasList = aliasList;
+    return *this;
 }
 
 // ======== SETTINGS DISPLAY ========
@@ -289,28 +288,34 @@ void SettingsDisplay<PAGE_AMOUNT>::input(uint8_t buttonCode, bool alternateActio
         return; // if the screen saver was active, absorb the button press
     }
 
-    // check if the page handles the pressed button
-    if (_pages[_currentPageIndex].isSelected()) // check if page is in edit mode, if so, let the page check if it overwrites the pressed button
-    {
-        if (_pages[_currentPageIndex].handleButton(buttonCode))
-        {
-            refreshValue();
-            return; // page handled the button, display does not need to handle it
-        }
-    }
-
-    // page does not handle the pressed button, fall back to default button actions
+    // figure out which button was pressed
     if (buttonCode & 0b01)
     {
         if (buttonCode & 0b10)
         {
             // buttonCode 0b11 "plus"
-            nextPage();
+            if (_pages[_currentPageIndex].isSelected())
+            {
+                _pages[_currentPageIndex].plusButton(); // if the current page is selected, let the page handle the button action
+                refreshValue();
+            }
+            else
+            {
+                nextPage(); // default action if the current page is not selected
+            }
         }
         else
         {
             // buttonCode 0b01 "minus"
-            previousPage();
+            if (_pages[_currentPageIndex].isSelected())
+            {
+                _pages[_currentPageIndex].minusButton(); // if the current page is selected, let the page handle the button action
+                refreshValue();
+            }
+            else
+            {
+                previousPage(); // default action if the current page is not selected
+            }
         }
     }
     else
@@ -318,13 +323,16 @@ void SettingsDisplay<PAGE_AMOUNT>::input(uint8_t buttonCode, bool alternateActio
         if (buttonCode & 0b10)
         {
             // buttonCode 0b10 "select"
-            if (_pages[_currentPageIndex].isSelected())
+            if (!_pages[_currentPageIndex].isMonitor()) // make sure page is not a monitor, monitors can not be edited
             {
-                deselectPage(false); // deselect page, do NOT discard changes.
-            }
-            else
-            {
-                selectPage();
+                if (_pages[_currentPageIndex].isSelected())
+                {
+                    deselectPage(false); // deselect selected page, do NOT discard changes.
+                }
+                else
+                {
+                    selectPage(); // select unselected page
+                }
             }
         }
         else
@@ -351,16 +359,12 @@ void SettingsDisplay<PAGE_AMOUNT>::setQuickSettingFunction(void (*quickSettingFu
 
 template <uint8_t PAGE_AMOUNT>
 void SettingsDisplay<PAGE_AMOUNT>::checkScreenSaver()
-{ // TODO use this function to also update linked variables on the current page from their source (-> will be useful for FPS display)
+{
     if (_screenSaverOn) // return if the screen saver is already on
         return;
 
     if (_screenSaverTurnOnTimestamp > millis()) // return if the screen saver shouldnt be turned on yet
-    {
-        Serial.print("Turn on screen saver in: ");
-        Serial.println(_screenSaverTurnOnTimestamp - millis());
         return;
-    }
 
     // turn on screen saver, also discard any pending changes
     _screen.noDisplay();
@@ -416,8 +420,20 @@ void SettingsDisplay<PAGE_AMOUNT>::refreshAll()
         _screen.print(_pages[_currentPageIndex].getRenderedFooter());
     }
     else
-    {                                            // page is not selected, use default footer
-        _screen.print("FUNC    \177 EDIT \176"); // 177 is left arrow, 176 is right arrow
+    { // page is not selected, generate a default footer
+        String defaultFooter = String("FUNC    ");
+        defaultFooter += SettingsPage::_SYMBOL_ARROW_LEFT + SettingsPage::_SYMBOL_SPACE;
+        if (_pages[_currentPageIndex].isMonitor())
+        {
+            defaultFooter += SettingsPage::_SYMBOL_SPACE + SettingsPage::_SYMBOL_SPACE + SettingsPage::_SYMBOL_SPACE + SettingsPage::_SYMBOL_SPACE;
+        }
+        else
+        {
+            defaultFooter += SettingsPage::_SYMBOL_EDIT;
+        }
+        defaultFooter += SettingsPage::_SYMBOL_SPACE + SettingsPage::_SYMBOL_ARROW_RIGHT;
+
+        _screen.print(defaultFooter);
     }
 }
 
@@ -444,4 +460,16 @@ bool SettingsDisplay<PAGE_AMOUNT>::setScreenSaverTimestamp(uint16_t offset)
     }
 
     return false;
+}
+
+template <uint8_t PAGE_AMOUNT>
+void SettingsDisplay<PAGE_AMOUNT>::updateMonitor()
+{
+    if (_pages[_currentPageIndex].isSelected()) // if the page is not selected, return
+        return;
+
+    if (!_pages[_currentPageIndex].isMonitor()) // if the page is not a monitor, return
+        return;
+
+    refreshValue(); // refresh value if the page is selected and a monitor
 }
