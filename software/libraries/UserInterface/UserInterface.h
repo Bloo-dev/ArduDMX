@@ -62,27 +62,32 @@ public:
 
     /**
      * @brief Get a rendered version of this page's complete header (top line).
+     * The returned String is pre-rendered therefore calling this function has a minimal perfomance impact.
      *
      * @return String String which represents the entire top line of the page.
      */
     String getRenderedHeader();
 
     /**
-     * @brief Get the Rendered Page object
+     * @brief Get a rendered version of this page's complete footer (bottom line).
+     * The returned String is pre-rendered therefore calling this function has a minimal perfomance impact.
      *
-     * @return String
+     * @return String String which represents the bottom top line of the page.
      */
-    String getRenderedFooter(); // TODO
+    String getRenderedFooter();
 
     /**
      * @brief Get a rendered version of this page's value.
      *
-     * @return String
+     * @return String String which represents the value (including unit) on this page.
      */
     String getRenderedValue();
 
 private:
-    uint8_t _state;
+    uint8_t _state; // TODO use lowest bit (currently unused) to indicate whether this page is considered a "monitor page" and should be constantly re-rendered if the page is selected
+                    // monitor pages should also not show a "save" option but only display the "back" option. When viewing a monitor page, the function button should remain bound to the function.
+                    // -> a function to get the monitor state of a page is required
+                    // -> what should incrementing/decrememnting on a monitor page do? -> increment or decrement, this may actually be useful (not for a FPS display, but for other things)
     uint8_t _buttonOverwriteMask;
     uint8_t *_linkedVariablePtr;
     // Temporary buffer that may be used if editing the linked var shouldn't happen immediately, but when changes should only be applied upon exiting edit mode.
