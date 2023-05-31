@@ -12,10 +12,21 @@
 class SettingsPage
 {
 public:
+    inline static String _SYMBOL_SEPARATOR = String(": ");
+    inline static String _SYMBOL_FULL_STOP = String(".");
+    inline static String _SYMBOL_SPACE = String(" ");
+    inline static String _SYMBOL_PLUS = String("+");
+    inline static String _SYMBOL_MINUS = String("-");
+    inline static String _SYMBOL_SAVE = String("SAVE");
+    inline static String _SYMBOL_BACK = String("BACK");
+    inline static String _SYMBOL_EDIT = String("EDIT");
+    inline static String _SYMBOL_ARROW_LEFT = String("\177");
+    inline static String _SYMBOL_ARROW_RIGHT = String("\176");
+    
     /**
      * @brief Construct a new SettingsPage instance. Not to be used directly. Refer to SettingsPageFactory for SettingsPage intanciation.
      */
-    SettingsPage(uint8_t state, String settingName, uint8_t buttonOverwriteMask, uint8_t *linkedVarPtr, uint8_t linkedVarMin, uint8_t linkedVarMax, char unitSymbol, String aliasList);
+    SettingsPage(uint8_t state, String settingName, uint8_t *linkedVariablePtr, uint8_t linkedVarMin, uint8_t linkedVarMax, char unitSymbol, String aliasList);
 
     /**
      * @brief Construct a new Settings Page object. Not to be used directly. Refer to SettingsPageFactory for SettingsPage intanciation.
@@ -26,7 +37,7 @@ public:
     SettingsPage();
 
     /**
-     * @brief Checks whether the current page is selected (in "edit" mode).
+     * @brief Checks whether this page is selected (in "edit" mode).
      *
      * @return true if the page is selected.
      * @return false if the page is not selected.
@@ -52,13 +63,48 @@ public:
     void deselectSave();
 
     /**
-     * @brief Checks if the given button is being overwritten by this page. If so, the corrosponding action is executed.
-     *
-     * @param buttonCode Button code of the button that was pressed. May be 0b00-0b11.
-     * @return true if the button is overwritten by this page.
-     * @return false if the button is not overwritten by this page and the SettingsDisplay should execute a default button action.
+     * @brief Checks whether change previews are enabled for this page.
+     * 
+     * @return true If change previews are enabled for this page.
+     * @return false If change previews are disabled for this page.
      */
-    bool handleButton(uint8_t buttonCode);
+    bool hasChangePreviewsEnabled();
+
+    /**
+     * @brief Checks whether this page is a monitor page. When selected, Monitor pages constantly update the displayed value from the linked variable.
+     * 
+     * @return true If the page is a Monitor.
+     * @return false If the page is not a Monitor.
+     */
+    bool isMonitor();
+
+    /**
+     * @brief Decrements the linked variable, unless this button has been disabled upon creation of this SettingsPage.
+     * 
+     */
+    void minusButton();
+
+    /**
+     * @brief Checks whether the minus button was disabled upon creation of this SettingsPage.
+     *
+     * @return true If the minus button is disabled. If so, pressing it should not yield any action.
+     * @return false If the minus button is available. If so, pressing it should decrement the linked variable.
+     */
+    bool minusButtonDisabled();
+
+    /**
+     * @brief Increments the linked variable, unless this button has been disabled upon creation of this SettingsPage.
+     *
+     */
+    void plusButton();
+
+    /**
+     * @brief Checks whether the plus button was disabled upon creation of this SettingsPage.
+     *
+     * @return true If the plus button is disabled. If so, pressing it should not yield any action.
+     * @return false If the plus button is available. If so, pressing it should increment the linked variable.
+     */
+    bool plusButtonDisabled();
 
     /**
      * @brief Get a rendered version of this page's complete header (top line).
@@ -84,30 +130,36 @@ public:
     String getRenderedValue();
 
 private:
-    uint8_t _state; // TODO use lowest bit (currently unused) to indicate whether this page is considered a "monitor page" and should be constantly re-rendered if the page is selected
-                    // monitor pages should also not show a "save" option but only display the "back" option. When viewing a monitor page, the function button should remain bound to the function.
-                    // -> a function to get the monitor state of a page is required
-                    // -> what should incrementing/decrememnting on a monitor page do? -> increment or decrement, this may actually be useful (not for a FPS display, but for other things)
-    uint8_t _buttonOverwriteMask;
+    uint8_t _state;
     uint8_t *_linkedVariablePtr;
     // Temporary buffer that may be used if editing the linked var shouldn't happen immediately, but when changes should only be applied upon exiting edit mode.
     uint8_t _linkedVariableEditBuffer;
     uint8_t _linkedVariableMin;
     uint8_t _linkedVariableMax;
-
-    inline static String _SYMBOL_SEPARATOR = String(": ");
-    inline static String _SYMBOL_FULL_STOP = String(".");
-    inline static String _SYMBOL_SPACE = String(" ");
-    inline static String _SYMBOL_PLUS = String("+");
-    inline static String _SYMBOL_MINUS = String("-");
-    inline static String _SYMBOL_SAVE = String("SAVE");
-    inline static String _SYMBOL_BACK = String("BACK");
-    inline static String _SYMBOL_ARROW_LEFT = String("\177");
-    inline static String _SYMBOL_ARROW_RIGHT = String("\176");
     String _settingName;
     String _footer;
     char _unitSymbol;
     String _aliasList;
+
+    /**
+     * @brief Stores the supplied value to a storage location.
+     * This storage location is either the linked variable, or the linked variable buffer, depending on whether change previews are on.
+     * If change previews are on, the value is written directly to the linked variable.
+     * If change previews are off, the value is only written to the linked variable buffer.
+     * 
+     * @param value The value to be stored to the storage location.
+     */
+    void storeValue(uint8_t value);
+
+    /**
+     * @brief Load the value from a storage location.
+     * This storage location is either the linked variable, or the linked variable buffer, depnding on whether change previews are on.
+     * If change previews are on, the value is read directly from the linked variable.
+     * If change previews are off, the value is read from the linked variable buffer.
+     *  
+     * @return uint8_t The value loaded from the storage location.
+     */
+    uint8_t loadValue();
 };
 
 /**
@@ -121,15 +173,9 @@ public:
      * @brief Construct a new SettingsPageFactory object.
      *
      * @param settingName String to be displayed as the name of this setting.
-     * @param buttonOverwriteMask Mask which specifies which buttons this settings page overwrites (aka replaces those buttons' default actions with page specific actions).
-     *                           Each button is assigned a 2-bit field which defines its new page specific action. If the field is left 0b00, the button is not overwritten by the page and falls back to it's default behavior.
-     *                           Format: 0b(00)(00)(00)(00) which corospond to 4 buttons, labeled by 'buttonCodes' 3, 2, 1, 0, in order.
-     *                           - (0b10) sets the button to restore the linked variable to a default value. TODO unimplemented
-     *                           - (0b01) sets the button to decrease the linked variable if pressed.
-     *                           - (0b11) sets the button to increase the linked variable if pressed.
      * @param linkedVarPtr A uint8_t variable which is exposed to the user for modification on this SettingsPage.
      */
-    SettingsPageFactory(String settingName, uint8_t buttonOverwriteMask, uint8_t *linkedVarPtr);
+    SettingsPageFactory(String settingName, uint8_t *linkedVarPtr);
 
     /**
      * @brief Produces a SettingsPage from this SettingsPageFactory.
@@ -138,6 +184,22 @@ public:
      * @return SettingsPage based on the set parameters of this SettingsPageFactory.
      */
     SettingsPage finalize();
+
+    /**
+     * @brief Disables button 0b01 when the page is selected.
+     * Therefore, the linked variable can no longer be decremented when the page is selected (except for roll-overs).
+     *
+     * @return SettingsPageFactory based on the set parameters of this SettingsPageFactory.
+     */
+    SettingsPageFactory disableMinusButton();
+
+    /**
+     * @brief Disables button 0b11 when the page is selected.
+     * Therefore, the linked variable can no longer be incremented when the page is selected (except for roll-overs).
+     *
+     * @return SettingsPageFactory based on the set parameters of this SettingsPageFactory.
+     */
+    SettingsPageFactory disablePlusButton();
 
     /**
      * @brief Set limits for the values the linked variable may be set to via the user interface.
@@ -149,14 +211,6 @@ public:
     SettingsPageFactory setLinkedVariableLimits(uint8_t min, uint8_t max);
 
     /**
-     * @brief Sets whether changes made on a selected page (in "edit" mode) should be applied immeadiately or whether to only apply them when the page is unselected.
-     *
-     * @param immediateChanges 'true' if the changes made on a selected page should be applied immediately.
-     * @return SettingsPageFactory This instance of the SettingsPageFactory, with values updated.
-     */
-    SettingsPageFactory setImmediateChanges(bool immediateChanges);
-
-    /**
      * @brief Sets the unit to be displayed behind the value of the linked variable on the screen.
      *
      * @param unitSymbol A one-character unit symbol.
@@ -165,23 +219,49 @@ public:
     SettingsPageFactory setLinkedVariableUnits(char unitSymbol);
 
     /**
+     * @brief Enables change previews.
+     * With change previews enabled, changes made in edit mode will be applied immediately instead of only upon saving.
+     * The user may then SAVE to keep these changes or BACK to discard the changes.
+     *
+     * @return SettingsPageFactory This instance of the SettingsPageFactory, with values updated.
+     */
+    SettingsPageFactory enableChangePreviews();
+
+    /**
+     * @brief Turns this page into a Monitor.
+     * Monitor pages can be used to display changing values, but Monitors can not be selected ("edited").
+     * Calling SettingsDisplay::updateMonitor() updates the value displayed by the currently displayed page,
+     * given the page is a monitor.
+     * As Monitor pages can not be edited, setting enableChangePreviews() will not have an effect (but changePreviews are enabled automatically for technical reasons).
+     * However, Monitor pages still respect the setLinkedVariableLimits(), setLinkedVariableUnits() and setDisplayAlias() configurations.
+     * setLinkedVariableLimits() will modulate the underlying variable to fit the limits, but do note that this does only affect the display, the underlying variable is not limited.
+     * setLinkedVariableUnits() will add a unit symbol to be displayed behind the variable, as expected.
+     * setDisplayAlias() will render the numbers provided by the underlying linked variable as the provided aliases, if possible.
+     *
+     * @return SettingsPageFactory This instance of the SettingsPageFactory, with values updated.
+     */
+    SettingsPageFactory makeMonitor();
+
+    /**
      * @brief Sets display aliases for the linked variable. These alias will replace the numbers of the linked variable with 5-character strings.
      * E.g. this may be used to replace 1 with "ON" and 0 with "OFF".
      *
      * @param aliasList String object which represents a concatination of possible aliases. Must have a lenght of 5, 10, 15, 20, ... .
-     * E.g. "   ON  OFF" could be used to introduce the two aliases "ON" and "OFF". Turns aliases off if the supplied String is "".
+     * E.g. "   ON  OFF" could be used to introduce the two aliases "ON" and "OFF".
      * @return SettingsPageFactory This instance of the SettingsPageFactory, with values updated.
      */
     SettingsPageFactory setDisplayAlias(String aliasList);
 
 private:
-    // Stores the state of the page. Format: 0b0000
-    // 0b(0|1)000 encodes whether the page is currently selected.
-    // 0b0(0|1)00 encodes whether the changes to the linked variable should be applied immediately (1) or whether the buffer should be used (0).
-    // 0b00(0|1)0 encodes whether the displayAlias should be used.
+    // Stores the state of the page. Format: 0b000000
+    // 0b(0|1)00000 encodes whether the button 0b01 "minus" is disabled when the page is selected (if this is 0, then this button can be used to decrement the linked variable)
+    // 0b0(0|1)0000 encodes whether the button 0b11 "plus" is disabled when the page is selected (if this is 0, then this button can be used to increment the linked variable).
+    // 0b00(0|1)000 encodes whether the page is currently selected.
+    // 0b000(0|1)00 encodes whether changes previews are enabled.
+    // 0b0000(0|1)0 encodes whether the displayAlias should be used.
+    // 0b00000(0|1) encodes whether the page is a Monitor page.
     uint8_t _state;
     String _settingName;
-    uint8_t _buttonOverwriteMask;
     uint8_t *_linkedVariablePtr;
     uint8_t _linkedVariableMin;
     uint8_t _linkedVariableMax;
@@ -230,6 +310,15 @@ public:
      * Not calling this function will effectively disable the screen saver.
      */
     void checkScreenSaver();
+
+    /**
+     * @brief Enables Monitor pages to update their values whilst they are being displayed.
+     * Call this function regularly to keep updating the displayed values of Monitor pages.
+     * If the page currently displayed is not a monitor page, or is not selected, then this function will return immediately.
+     * Not calling this function will freeze the values displayed on Monitor pages.
+     * 
+     */
+    void updateMonitor();
 
 private:
     // Array of pages held by this SettingsDisplay.
