@@ -275,8 +275,6 @@ void SettingsDisplay<PAGE_AMOUNT>::initializeDisplay(uint8_t screenAddress)
     _screen = LiquidCrystal_I2C(screenAddress, 16, 2);
     _screen.init();
     _screen.clear();
-    setScreenSaverTimestamp(2 * SCREEN_SAVER_OFFSET);
-    refreshAll();
 }
 
 template <uint8_t PAGE_AMOUNT>
@@ -465,6 +463,9 @@ bool SettingsDisplay<PAGE_AMOUNT>::setScreenSaverTimestamp(uint16_t offset)
 template <uint8_t PAGE_AMOUNT>
 void SettingsDisplay<PAGE_AMOUNT>::updateMonitor()
 {
+    if (_screenSaverOn) // dont update the monitor if the screen saver is on
+        return;
+
     if (_pages[_currentPageIndex].isSelected()) // if the page is not selected, return
         return;
 
@@ -472,4 +473,40 @@ void SettingsDisplay<PAGE_AMOUNT>::updateMonitor()
         return;
 
     refreshValue(); // refresh value if the page is selected and a monitor
+}
+
+template <uint8_t PAGE_AMOUNT>
+void SettingsDisplay<PAGE_AMOUNT>::print(String header, String footer)
+{
+    if (header.length() > DISPLAY_WIDTH)
+    {
+        header = header.substring(0,DISPLAY_WIDTH);
+    }
+
+    while (header.length() < DISPLAY_WIDTH)
+    {
+        header += SettingsPage::_SYMBOL_SPACE;
+    }
+
+    if (footer.length() > DISPLAY_WIDTH)
+    {
+        footer = footer.substring(0, DISPLAY_WIDTH);
+    }
+
+    while (footer.length() < DISPLAY_WIDTH)
+    {
+        footer += SettingsPage::_SYMBOL_SPACE;
+    }
+
+    _screen.setCursor(0,0);
+    _screen.print(header);
+    _screen.setCursor(0, 1);
+    _screen.print(footer);
+}
+
+template <uint8_t PAGE_AMOUNT>
+void SettingsDisplay<PAGE_AMOUNT>::showPages()
+{
+    setScreenSaverTimestamp(2 * SCREEN_SAVER_OFFSET);
+    refreshAll();
 }

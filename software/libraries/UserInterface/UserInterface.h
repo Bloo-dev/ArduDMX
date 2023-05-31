@@ -320,6 +320,21 @@ public:
      */
     void updateMonitor();
 
+    /**
+     * @brief Prints the supplied Strings to the attached screen. The Strings are padded or trimmed to the width of a display line.
+     * This function is slow and should not be called inside loops.
+     * 
+     * @param header The string to be printed on the top line of the display.
+     * @param footer The string to be printed on the bottom line of the display.
+     */
+    void print(String header, String footer);
+
+    /**
+     * @brief Renders pages view. Must be called at least once after object creation, otherwise the user will have to press a button.
+     * 
+     */
+    void showPages();
+
 private:
     // Array of pages held by this SettingsDisplay.
     SettingsPage _pages[PAGE_AMOUNT];
