@@ -24,7 +24,7 @@ const uint8_t fixtureAmount = sizeof(fixtures) / sizeof(DMXFixture);
 const uint8_t profileAmount = sizeof(defaultColorSet) / sizeof(FixtureProfile);
 const FixtureProfile *const profiles[] = {defaultColorSet, warmColorSet, coldColorSet, uwuColorSet};//, warmColorSet, coldColorSet, uwuColorSet};
 // Automatic Profile Cycling
-uint64_t lastPermutatedAtMs;
+uint32_t lastPermutatedAtMs;
 uint64_t cachedPermutationCode;
 const uint16_t permutationCycleLengthMs = 5000;
 // DMX Hardware
@@ -66,14 +66,13 @@ const float amplificationFactorMin = 0.015625; // minimal allowed amplification 
 float amplificationFactor = 12.0;             // amplification for signals considered non-noise (ones that should result in a non-zero light response), managed automatically
 uint16_t noiseLevel = 0;                      // lower bound for noise, determined automatically at startup
 // =============================
-// Backup settings for basement: noiseLevel=200, signalAmplification=6.0
 
 void setup()
 {
     // Start LCD
     userInterface.setQuickSettingFunction(toggleStrobe);
     userInterface.initializeDisplay(0x27);
-    userInterface.print(F("    arduDMX     "), F(" ver 2023-05-31 "));
+    userInterface.print(F("    arduDMX     "), F(" ver 2023-06-01 "));
     delay(1000);
 
     // Start FFT
@@ -339,7 +338,7 @@ void permutateProfiles(uint64_t permutation, FixtureProfile *constProfiles, Fixt
 uint64_t generatePermutationCode(uint64_t &previousPermutationCode, uint16_t cycleLengthMs)
 {
     // if last permutation shift wasn't too long, return last permutation
-    uint64_t timeNow = millis();
+    uint32_t timeNow = millis();
     if (timeNow - lastPermutatedAtMs < cycleLengthMs)
         return previousPermutationCode;
 
@@ -358,9 +357,6 @@ uint64_t generatePermutationCode(uint64_t &previousPermutationCode, uint16_t cyc
 */
 void setFixtureColor(DMXFixture &targetFixture, int *audioAmplitudes, uint32_t colorResponse)
 {
-    // what else goes here?
-    // -> setting white, strobe and so on depending on lever states
-
     // convert colors to rgb and send to fixture
     targetFixture.setRGB(colorResponse >> 16, (colorResponse & 0x00FF00) >> 8, colorResponse & 0x0000FF);
 }

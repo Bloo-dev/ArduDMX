@@ -346,6 +346,7 @@ void SettingsDisplay<PAGE_AMOUNT>::input(uint8_t buttonCode, bool alternateActio
             else if (_hasQuickSettingFunction) // if a quick setting function was specified, execute it
             {
                 _quickSettingFunction(alternateAction);
+                refreshAll();
             }
         }
     }
