@@ -35,20 +35,19 @@ uint16_t frequencyAmplitudes[7]; // stores data from MSGEQ7 chip
 // User Interface Hardware
 uint8_t whiteLightSetting = 0;
 uint8_t gainModeSetting = 0;
-uint8_t strobeFrequencySetting = 0;
-uint8_t strobeFrequencyBuffer = 100;
+uint8_t strobeFrequencySetting = 100;
+bool strobeEnabled = false;
 uint8_t colorSetSetting = 0;
 uint8_t msPerFrameMonitor = 0;
 void toggleStrobe(bool alternateAction)
 {
-    if (strobeFrequencySetting)
+    if (strobeEnabled)
     {
-        strobeFrequencyBuffer = strobeFrequencySetting;
-        strobeFrequencySetting = 0;
+        strobeEnabled = false;
     }
     else
     {
-        strobeFrequencySetting = strobeFrequencyBuffer;
+        strobeEnabled = true;
     }   
 }
 SettingsPage pages[] = {SettingsPageFactory("Lights", &whiteLightSetting).setLinkedVariableLimits(0, 4).setDisplayAlias("  OFF  BARTABLE  ALL").finalize(), SettingsPageFactory("Strobe", &strobeFrequencySetting).setLinkedVariableLimits(0, 101).setLinkedVariableUnits('%').finalize(), SettingsPageFactory("Gain", &gainModeSetting).setLinkedVariableLimits(0, 3).setDisplayAlias(" AUTO  LOW HIGH").enableChangePreviews().finalize(), SettingsPageFactory("Colors", &colorSetSetting).setLinkedVariableLimits(0, 4).setDisplayAlias("  RGB WARM COLD  uwu").enableChangePreviews().finalize(), SettingsPageFactory("Frame ms", &msPerFrameMonitor).makeMonitor().finalize()};
@@ -141,45 +140,11 @@ void loop()
     permutateProfiles(generatePermutationCode(cachedPermutationCode, permutationCycleLengthMs), profiles[colorSetSetting], permutatedProfiles, fixtureAmount);
 
     // Manage Fixtures
-    // White Light Configuration (if setting is not OFF)
-    if (whiteLightSetting)
-    {
-        if (whiteLightSetting == 1)
-        {
-            fixtures[0].setWhite(0);
-            fixtures[1].setWhite(128);
-            fixtures[2].setWhite(0);
-            fixtures[3].setWhite(0);
-        }
-        else if (whiteLightSetting == 2)
-        {
-            fixtures[0].setWhite(0);
-            fixtures[1].setWhite(0);
-            fixtures[2].setWhite(0);
-            fixtures[3].setWhite(128);
-        }
-        else if (whiteLightSetting == 3)
-        {
-            fixtures[0].setWhite(128);
-            fixtures[1].setWhite(128);
-            fixtures[2].setWhite(128);
-            fixtures[3].setWhite(128);
-        }
-    }
-    else
-    {
-        fixtures[0].setWhite(0);
-        fixtures[1].setWhite(0);
-        fixtures[2].setWhite(0);
-        fixtures[3].setWhite(0);
-    }
-    
-
     for (uint8_t fixtureId = 0; fixtureId < fixtureAmount; fixtureId++)
     {
         setFixtureColor(fixtures[fixtureId], frequencyAmplitudes, permutatedProfiles[fixtureId].getHexColor()); // set color data
         setFixtureBrightness(fixtures[fixtureId], frequencyAmplitudes, permutatedProfiles[fixtureId].getHexFrequency()); // set brightness data
-        fixtures[fixtureId].setStrobe(strobeFrequencySetting * (255/100)); // set strobe frequency (0 means off)
+        setFixtureWhite(fixtures[fixtureId], fixtureId, strobeEnabled, strobeFrequencySetting, whiteLightSetting);
 
         // send data to fixtures
         fixtures[fixtureId].display(dmxMaster);
@@ -382,4 +347,24 @@ void setFixtureBrightness(DMXFixture &targetFixture, int *audioAmplitudes, uint3
         }
     }
     targetFixture.setRGBDimmer((uint8_t)(brightness / observedBands));
+}
+
+void setFixtureWhite(DMXFixture &targetFixture, uint8_t fixtureId, bool strobeEnabled, uint8_t strobeFrequency, uint8_t whiteSetting)
+{
+    // reset white value to 0
+    targetFixture.setWhite(0);
+
+    // reset strobe frequency to 0
+    targetFixture.setStrobe(0);
+
+    if (strobeEnabled) // if strobe is on, enable white on all fixtures
+    {
+        targetFixture.setWhite(255);
+        targetFixture.setStrobe(strobeFrequency * (255/100));
+    }
+    else if (whiteSetting) // if strobe is off, white is only enabled on fixtures depending on white setting. If whiteSetting == 0, none of these special rules apply
+    {
+        if ((whiteSetting == 1 && fixtureId == 1) || (whiteSetting == 2 && fixtureId == 3) || whiteSetting == 3)
+            targetFixture.setWhite(255);
+    }
 }

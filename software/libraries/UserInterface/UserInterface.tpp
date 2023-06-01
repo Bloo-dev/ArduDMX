@@ -9,7 +9,7 @@ SettingsPage::SettingsPage() : _state(0), _settingName(), _footer(), _linkedVari
 {
 }
 
-SettingsPage::SettingsPage(uint8_t state, String settingName, uint8_t *linkedVariablePtr, uint8_t linkedVarMin, uint8_t linkedVarMax, char unitSymbol, String aliasList) : _state(state), _linkedVariablePtr(linkedVariablePtr), _linkedVariableEditBuffer(0), _linkedVariableMin(linkedVarMin), _linkedVariableMax(linkedVarMax), _unitSymbol(unitSymbol), _aliasList(aliasList)
+SettingsPage::SettingsPage(uint8_t state, String settingName, uint8_t *linkedVariablePtr, uint8_t linkedVarMin, uint8_t linkedVarMax, char unitSymbol, String aliasList) : _state(state), _linkedVariablePtr(linkedVariablePtr), _linkedVariableEditBuffer((*linkedVariablePtr)), _linkedVariableMin(linkedVarMin), _linkedVariableMax(linkedVarMax), _unitSymbol(unitSymbol), _aliasList(aliasList)
 {
     // Precompute setting name displayed in header. Format: 'Example Sett.: '
     // Calculate how much space is available for the settingName
