@@ -12,16 +12,7 @@
 class SettingsPage
 {
 public:
-    inline static String _SYMBOL_SEPARATOR = String(": ");
-    inline static String _SYMBOL_FULL_STOP = String(".");
-    inline static String _SYMBOL_SPACE = String(" ");
-    inline static String _SYMBOL_PLUS = String("+");
-    inline static String _SYMBOL_MINUS = String("-");
-    inline static String _SYMBOL_SAVE = String("SAVE");
-    inline static String _SYMBOL_BACK = String("BACK");
-    inline static String _SYMBOL_EDIT = String("EDIT");
-    inline static String _SYMBOL_ARROW_LEFT = String("\177");
-    inline static String _SYMBOL_ARROW_RIGHT = String("\176");
+    const inline static String _SYMBOL_SPACE = String(" ");
     
     /**
      * @brief Construct a new SettingsPage instance. Not to be used directly. Refer to SettingsPageFactory for SettingsPage intanciation.

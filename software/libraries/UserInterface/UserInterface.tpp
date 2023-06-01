@@ -5,7 +5,7 @@
 //
 // ======== ======== ======== ========
 
-SettingsPage::SettingsPage() : _state(0), _settingName(""), _footer(""), _linkedVariablePtr(0), _linkedVariableEditBuffer(0), _linkedVariableMin(0), _linkedVariableMax(255), _unitSymbol(' '), _aliasList("")
+SettingsPage::SettingsPage() : _state(0), _settingName(), _footer(), _linkedVariablePtr(0), _linkedVariableEditBuffer(0), _linkedVariableMin(0), _linkedVariableMax(255), _unitSymbol(' '), _aliasList()
 {
 }
 
@@ -13,7 +13,8 @@ SettingsPage::SettingsPage(uint8_t state, String settingName, uint8_t *linkedVar
 {
     // Precompute setting name displayed in header. Format: 'Example Sett.: '
     // Calculate how much space is available for the settingName
-    int8_t targetLength = DISPLAY_WIDTH - (_SYMBOL_SEPARATOR.length() + VALUE_DISPLAY_WIDTH + UNIT_DISPLAY_WIDTH);
+    int8_t targetLength = DISPLAY_WIDTH - (2 + VALUE_DISPLAY_WIDTH + UNIT_DISPLAY_WIDTH); // 2 for length of ": "
+    settingName.reserve(targetLength);
 
     while (targetLength > settingName.length()) // add left whitespace padding if there is enough space
     {
@@ -22,23 +23,24 @@ SettingsPage::SettingsPage(uint8_t state, String settingName, uint8_t *linkedVar
 
     if (targetLength < settingName.length()) // shorten setting name if name is there is too little space
     {
-        settingName = settingName.substring(0, targetLength - _SYMBOL_FULL_STOP.length());
-        settingName += _SYMBOL_FULL_STOP;
+        settingName = settingName.substring(0, targetLength - 1); // -1 for length of "."
+        settingName += String(".");
     }
-    _settingName += settingName + _SYMBOL_SEPARATOR;
+    _settingName += settingName + String(": ");
 
     // Precompute footer (full 2nd line of the screen)
-    _footer = String("");
+    _footer = String(F(""));
+    _footer.reserve(DISPLAY_WIDTH);
     if (minusButtonDisabled())
     {
         _footer += _SYMBOL_SPACE;
     }
     else
     {
-        _footer += _SYMBOL_MINUS;
+        _footer += String("-");
     }
 
-    _footer += _SYMBOL_SPACE + _SYMBOL_SAVE + _SYMBOL_SPACE;
+    _footer += _SYMBOL_SPACE + String("SAVE") + _SYMBOL_SPACE;
 
     if (plusButtonDisabled())
     {
@@ -46,14 +48,14 @@ SettingsPage::SettingsPage(uint8_t state, String settingName, uint8_t *linkedVar
     }
     else
     {
-        _footer += _SYMBOL_PLUS;
+        _footer += String("+");
     }
 
-    while (_footer.length() + _SYMBOL_BACK.length() < DISPLAY_WIDTH)
+    while (_footer.length() + 4 < DISPLAY_WIDTH) // footer length plus length of "BACK" (=4)
     {
         _footer = _SYMBOL_SPACE + _footer;
     }
-    _footer = _SYMBOL_BACK + _footer;
+    _footer = String("BACK") + _footer;
 }
 
 bool SettingsPage::isSelected()
@@ -175,6 +177,7 @@ String SettingsPage::getRenderedFooter()
 String SettingsPage::getRenderedValue()
 {
     String linkedVariableValue;
+    linkedVariableValue.reserve(VALUE_DISPLAY_WIDTH);
     if (_state & 0b000010) // use alias instead of raw values
     {
         uint8_t aliasIndex = (loadValue() % (_aliasList.length() / VALUE_DISPLAY_WIDTH)) * VALUE_DISPLAY_WIDTH;
@@ -419,17 +422,17 @@ void SettingsDisplay<PAGE_AMOUNT>::refreshAll()
     }
     else
     { // page is not selected, generate a default footer
-        String defaultFooter = String("FUNC    ");
-        defaultFooter += SettingsPage::_SYMBOL_ARROW_LEFT + SettingsPage::_SYMBOL_SPACE;
+        String defaultFooter = String(F("FUNC    "));
+        defaultFooter += String("\177") + SettingsPage::_SYMBOL_SPACE;
         if (_pages[_currentPageIndex].isMonitor())
         {
             defaultFooter += SettingsPage::_SYMBOL_SPACE + SettingsPage::_SYMBOL_SPACE + SettingsPage::_SYMBOL_SPACE + SettingsPage::_SYMBOL_SPACE;
         }
         else
         {
-            defaultFooter += SettingsPage::_SYMBOL_EDIT;
+            defaultFooter += String("EDIT");
         }
-        defaultFooter += SettingsPage::_SYMBOL_SPACE + SettingsPage::_SYMBOL_ARROW_RIGHT;
+        defaultFooter += SettingsPage::_SYMBOL_SPACE + String("\176");
 
         _screen.print(defaultFooter);
     }

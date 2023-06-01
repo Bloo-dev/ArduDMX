@@ -8,17 +8,21 @@
 // Light Fixture Data
 const uint8_t maxBrightness = 217; // 85% max brightness to increase LED lifetime
 DMXFixture fixtures[] = {DMXFixture(1, maxBrightness), DMXFixture(7, maxBrightness), DMXFixture(13, maxBrightness), DMXFixture(19, maxBrightness)};                                       // configured fixtures and their start channels. The maximum amount of supported fixtures is 16.
-const FixtureProfile profiles[] = {FixtureProfile(0xFF0000, 0x00000FF), FixtureProfile(0x0000FF, 0xFF00000), FixtureProfile(0xFF0000, 0x00000FF), FixtureProfile(0x00FF00, 0x0039000)};   // profiles that fixtures can assume. Each profile consists of a hex code for color and a hex code for frequencies the fixture should respond to.
+const FixtureProfile defaultColorSet[] = {FixtureProfile(0xFF0000, 0x00000FF), FixtureProfile(0x0000FF, 0xFF00000), FixtureProfile(0xFF0000, 0x00000FF), FixtureProfile(0x00FF00, 0x0039000)}; // profiles that fixtures can assume. Each profile consists of a hex code for color and a hex code for frequencies the fixture should respond to.
+const FixtureProfile warmColorSet[] = {FixtureProfile(0xFF0000, 0x00000FF), FixtureProfile(0xBE4100, 0xFF00000), FixtureProfile(0xFF0000, 0x00000FF), FixtureProfile(0xD22D00, 0x0039000)};
+const FixtureProfile coldColorSet[] = {FixtureProfile(0x4B00B4, 0x00000FF), FixtureProfile(0x008080, 0xFF00000), FixtureProfile(0x4B00B4, 0x00000FF), FixtureProfile(0x464673, 0x0039000)};
+const FixtureProfile uwuColorSet[] = {FixtureProfile(0xFF0000, 0x00000FF), FixtureProfile(0x71008E, 0xFF00000), FixtureProfile(0xFF0000, 0x00000FF), FixtureProfile(0xAA0055, 0x0039000)};
 const uint8_t targetFrameTimeMs = 66;
 // MSGEQ7 Signal Data
 const uint8_t samplesPerRun = 1;//temp changed to 1 to see if results are better, was 16;       // number of consecutive samples to take whenever the audio is sampled (these are then averaged). Higher values inhibit random noise spikes.
-const uint16_t delayBetweenSamples = 1; // time in ms to wait between samples in a consecutive sample run. High values will decrease temporal resolution drastically.
+const uint8_t delayBetweenSamples = 1; // time in ms to wait between samples in a consecutive sample run. High values will decrease temporal resolution drastically.
 //  =============================
 
 // ===== GLOBAL VARIABLES ======
 // Fixture Management
 const uint8_t fixtureAmount = sizeof(fixtures) / sizeof(DMXFixture);
-const uint8_t profileAmount = sizeof(profiles) / sizeof(FixtureProfile);
+const uint8_t profileAmount = sizeof(defaultColorSet) / sizeof(FixtureProfile);
+const FixtureProfile *const profiles[] = {defaultColorSet, warmColorSet, coldColorSet, uwuColorSet};//, warmColorSet, coldColorSet, uwuColorSet};
 // Automatic Profile Cycling
 uint64_t lastPermutatedAtMs;
 uint64_t cachedPermutationCode;
@@ -30,16 +34,32 @@ Analyzer MSGEQ7(7, 4, 0);
 uint16_t frequencyAmplitudes[7]; // stores data from MSGEQ7 chip
 // User Interface Hardware
 uint8_t whiteLightSetting = 0;
+uint8_t gainModeSetting = 0;
+uint8_t strobeFrequencySetting = 0;
+uint8_t strobeFrequencyBuffer = 100;
+uint8_t colorSetSetting = 0;
 uint8_t msPerFrameMonitor = 0;
-SettingsPage pages[] = {SettingsPageFactory("Lights", &whiteLightSetting).setLinkedVariableLimits(0, 3).setDisplayAlias("  BARTABLE  ALL").finalize(), SettingsPageFactory("Frame ms", &msPerFrameMonitor).makeMonitor().finalize()};
-SettingsDisplay<2> userInterface(pages);
+void toggleStrobe(bool alternateAction)
+{
+    if (strobeFrequencySetting)
+    {
+        strobeFrequencyBuffer = strobeFrequencySetting;
+        strobeFrequencySetting = 0;
+    }
+    else
+    {
+        strobeFrequencySetting = strobeFrequencyBuffer;
+    }   
+}
+SettingsPage pages[] = {SettingsPageFactory("Lights", &whiteLightSetting).setLinkedVariableLimits(0, 4).setDisplayAlias("  OFF  BARTABLE  ALL").finalize(), SettingsPageFactory("Strobe", &strobeFrequencySetting).setLinkedVariableLimits(0, 101).setLinkedVariableUnits('%').finalize(), SettingsPageFactory("Gain", &gainModeSetting).setLinkedVariableLimits(0, 3).setDisplayAlias(" AUTO  LOW HIGH").enableChangePreviews().finalize(), SettingsPageFactory("Colors", &colorSetSetting).setLinkedVariableLimits(0, 4).setDisplayAlias("  RGB WARM COLD  uwu").enableChangePreviews().finalize(), SettingsPageFactory("Frame ms", &msPerFrameMonitor).makeMonitor().finalize()};
+SettingsDisplay<5> userInterface(pages);
 LatchedButton<8> plusButton(3, 1000/targetFrameTimeMs);
 LatchedButton<8> selectButton(5, 1000/targetFrameTimeMs);
 LatchedButton<8> minusButton(6, 1000/targetFrameTimeMs);
 LatchedButton<8> functionButton(9, 1000/targetFrameTimeMs);
 // Auto Gain
-NumericHistory<uint16_t,64> amplitudeHistory = NumericHistory<uint16_t,64>();
-NumericHistory<uint16_t,64> clippingHistory = NumericHistory<uint16_t,64>();
+NumericHistory<uint16_t,32> amplitudeHistory = NumericHistory<uint16_t,32>();
+NumericHistory<uint16_t,32> clippingHistory = NumericHistory<uint16_t,32>();
 const uint8_t targetDutyCycle = 196;          // target value for fixture cross-frequency duty cycle (time-clipped/time-not-clipped in parts of 1023, e.g. 196=19.2%)
 const float amplificationFactorMax = 64;      // maximum allowed amplifaction factor
 const float amplificationFactorMin = 0.015625; // minimal allowed amplification factor
@@ -51,16 +71,17 @@ uint16_t noiseLevel = 0;                      // lower bound for noise, determin
 void setup()
 {
     // Start LCD
+    userInterface.setQuickSettingFunction(toggleStrobe);
     userInterface.initializeDisplay(0x27);
-    userInterface.print("    arduDMX     ", " ver 2023-05-31 ");
+    userInterface.print(F("    arduDMX     "), F(" ver 2023-05-31 "));
     delay(1000);
 
     // Start FFT
-    userInterface.print("    Starting    ", "Audio Analyzer..");
+    userInterface.print(F("    Starting    "), F("Audio Analyzer.."));
     MSGEQ7.Init();
 
     // Start DMX
-    userInterface.print("    Starting    ", "DMX Controller..");
+    userInterface.print(F("    Starting    "), F("DMX Controller.."));
     dmxMaster.setAutoBreakMode();
     dmxMaster.enable();
 
@@ -75,12 +96,12 @@ void setup()
     lastPermutatedAtMs = 0;
 
     // Analyze Noise Levels (THERE MUST NOT BE AUDIO ON THE JACK FOR THIS TO WORK)
-    userInterface.print("    Probing     ", "     Noise...    ");
+    userInterface.print(F("    Probing     "), F("     Noise...    "));
     int noiseData[] = {0, 0, 0, 0, 0, 0, 0};
     sampleMSGEQ7(32, 1, noiseData);
     noiseLevel = getAverage(noiseData, 7, 12); // average over all frequencies and add some extra buffer
 
-    userInterface.print("     Setup      ", "   Complete!    ");
+    userInterface.print(F("     Setup      "), F("   Complete!    "));
     delay(500); // wait a bit for everything to stabalize
     userInterface.showPages();
 }
@@ -100,22 +121,66 @@ void loop()
 
     // Store history of duty cycle and transform values in frequencyAmplitudes into range [0..255]
     clippingHistory.update(transformAudioSignal(noiseLevel + signalMean, amplificationFactor, frequencyAmplitudes));
-    uint16_t dutyCycleMean = getAverage(clippingHistory.get(), clippingHistory.length(), 0);
 
-    // Get new amplification factor based on duty cycle mean (duty cycle of 196 is about 19.1%)
-    float dutyCycleDeviance = (float)targetDutyCycle / dutyCycleMean;
-    amplificationFactor = constrain(dutyCycleDeviance, amplificationFactorMin, amplificationFactorMax);
-    // TODO add toggle for this for manual gain control
+    if (gainModeSetting == 0)
+    {
+        // Get new amplification factor based on duty cycle mean (duty cycle of 196 is about 19.1%)
+        uint16_t dutyCycleMean = getAverage(clippingHistory.get(), clippingHistory.length(), 0);
+        float dutyCycleDeviance = (float)targetDutyCycle / dutyCycleMean;
+        amplificationFactor = constrain(dutyCycleDeviance, amplificationFactorMin, amplificationFactorMax);
+    }
+    else if (gainModeSetting == 1)
+    {
+        amplificationFactor = 0.5; // manual gain setting "low"
+    } else if (gainModeSetting == 2)
+    {
+        amplificationFactor = 48; // manual gain setting "high"
+    }
 
     // Select and Cycle Fixture Profiles
     FixtureProfile permutatedProfiles[fixtureAmount];
-    permutateProfiles(generatePermutationCode(cachedPermutationCode, permutationCycleLengthMs), profiles, permutatedProfiles, fixtureAmount);
+    permutateProfiles(generatePermutationCode(cachedPermutationCode, permutationCycleLengthMs), profiles[colorSetSetting], permutatedProfiles, fixtureAmount);
 
     // Manage Fixtures
+    // White Light Configuration (if setting is not OFF)
+    if (whiteLightSetting)
+    {
+        if (whiteLightSetting == 1)
+        {
+            fixtures[0].setWhite(0);
+            fixtures[1].setWhite(128);
+            fixtures[2].setWhite(0);
+            fixtures[3].setWhite(0);
+        }
+        else if (whiteLightSetting == 2)
+        {
+            fixtures[0].setWhite(0);
+            fixtures[1].setWhite(0);
+            fixtures[2].setWhite(0);
+            fixtures[3].setWhite(128);
+        }
+        else if (whiteLightSetting == 3)
+        {
+            fixtures[0].setWhite(128);
+            fixtures[1].setWhite(128);
+            fixtures[2].setWhite(128);
+            fixtures[3].setWhite(128);
+        }
+    }
+    else
+    {
+        fixtures[0].setWhite(0);
+        fixtures[1].setWhite(0);
+        fixtures[2].setWhite(0);
+        fixtures[3].setWhite(0);
+    }
+    
+
     for (uint8_t fixtureId = 0; fixtureId < fixtureAmount; fixtureId++)
     {
-        setFixtureColor(fixtures[fixtureId], frequencyAmplitudes, permutatedProfiles[fixtureId].getHexColor());
-        setFixtureBrightness(fixtures[fixtureId], frequencyAmplitudes, permutatedProfiles[fixtureId].getHexFrequency());
+        setFixtureColor(fixtures[fixtureId], frequencyAmplitudes, permutatedProfiles[fixtureId].getHexColor()); // set color data
+        setFixtureBrightness(fixtures[fixtureId], frequencyAmplitudes, permutatedProfiles[fixtureId].getHexFrequency()); // set brightness data
+        fixtures[fixtureId].setStrobe(strobeFrequencySetting * (255/100)); // set strobe frequency (0 means off)
 
         // send data to fixtures
         fixtures[fixtureId].display(dmxMaster);
@@ -146,7 +211,7 @@ void loop()
     userInterface.updateMonitor();
 
     // Wait until frame time is over
-    msPerFrameMonitor = millis() - frameStartTime;
+    msPerFrameMonitor = (uint8_t)(millis() - frameStartTime);
     int16_t remainingFrameTimeMs = targetFrameTimeMs - msPerFrameMonitor;
     delay(max(remainingFrameTimeMs, 0));
 }
