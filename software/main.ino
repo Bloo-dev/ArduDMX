@@ -71,7 +71,7 @@ void setup()
     // Start LCD
     userInterface.setQuickSettingFunction(toggleStrobe);
     userInterface.initializeDisplay(0x27);
-    userInterface.print(F("    arduDMX     "), F(" ver 2023-06-01 "));
+    userInterface.print(F("    arduDMX     "), F(" ver 2023-06-18 "));
     delay(1000);
 
     // Start FFT
@@ -112,7 +112,7 @@ void loop()
     // Get FFT data from MSGEQ7 chip
     sampleMSGEQ7(samplesPerRun, delayBetweenSamples, frequencyAmplitudes);
 
-    // Store history of average signal across all bands (with background noise already subtracted)
+    // Store history of average signal across all bands (with background noise already subtracted) // TODO move these calculations into a function to free local variable memory space from temp variables
     uint16_t averageAmplitudeNoNoise = max((int32_t)getAverage(frequencyAmplitudes, 7, 0) - noiseLevel, 0);
     amplitudeHistory.update(averageAmplitudeNoNoise);
     uint16_t signalMean = getAverage(amplitudeHistory.get(), amplitudeHistory.length(), 0);
@@ -364,7 +364,13 @@ void setFixtureWhite(DMXFixture &targetFixture, uint8_t fixtureId, bool strobeEn
     }
     else if (whiteSetting) // if strobe is off, white is only enabled on fixtures depending on white setting. If whiteSetting == 0, none of these special rules apply
     {
-        if ((whiteSetting == 1 && fixtureId == 1) || (whiteSetting == 2 && fixtureId == 3) || whiteSetting == 3)
-            targetFixture.setWhite(255);
+        if ((whiteSetting == 1 && fixtureId == 1) || (whiteSetting == 2 && fixtureId == 3))
+        {
+            targetFixture.setWhite(32); // spotlight on bar or table, low light level
+        }
+        else if (whiteSetting == 3)
+        {
+            targetFixture.setWhite(255); // full bright mode for all lights on
+        }
     }
 }
