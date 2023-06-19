@@ -24,9 +24,9 @@ SettingsPage::SettingsPage(uint8_t state, String settingName, uint8_t *linkedVar
     if (targetLength < settingName.length()) // shorten setting name if name is there is too little space
     {
         settingName = settingName.substring(0, targetLength - 1); // -1 for length of "."
-        settingName += String(".");
+        settingName += String(F("."));
     }
-    _settingName += settingName + String(": ");
+    _settingName += settingName + String(F(": "));
 
     // Precompute footer (full 2nd line of the screen)
     _footer = String(F(""));
@@ -37,10 +37,10 @@ SettingsPage::SettingsPage(uint8_t state, String settingName, uint8_t *linkedVar
     }
     else
     {
-        _footer += String("-");
+        _footer += String(F("-"));
     }
 
-    _footer += _SYMBOL_SPACE + String("SAVE") + _SYMBOL_SPACE;
+    _footer += _SYMBOL_SPACE + String(F("SAVE")) + _SYMBOL_SPACE;
 
     if (plusButtonDisabled())
     {
@@ -48,14 +48,14 @@ SettingsPage::SettingsPage(uint8_t state, String settingName, uint8_t *linkedVar
     }
     else
     {
-        _footer += String("+");
+        _footer += String(F("+"));
     }
 
     while (_footer.length() + 4 < DISPLAY_WIDTH) // footer length plus length of "BACK" (=4)
     {
         _footer = _SYMBOL_SPACE + _footer;
     }
-    _footer = String("BACK") + _footer;
+    _footer = String(F("BACK")) + _footer;
 }
 
 bool SettingsPage::isSelected()
@@ -424,16 +424,16 @@ void SettingsDisplay<PAGE_AMOUNT>::refreshAll()
     else
     { // page is not selected, generate a default footer
         String defaultFooter = String(F("FUNC    "));
-        defaultFooter += String("\177") + SettingsPage::_SYMBOL_SPACE;
+        defaultFooter += String(F("\177")) + SettingsPage::_SYMBOL_SPACE;
         if (_pages[_currentPageIndex].isMonitor())
         {
             defaultFooter += SettingsPage::_SYMBOL_SPACE + SettingsPage::_SYMBOL_SPACE + SettingsPage::_SYMBOL_SPACE + SettingsPage::_SYMBOL_SPACE;
         }
         else
         {
-            defaultFooter += String("EDIT");
+            defaultFooter += String(F("EDIT"));
         }
-        defaultFooter += SettingsPage::_SYMBOL_SPACE + String("\176");
+        defaultFooter += SettingsPage::_SYMBOL_SPACE + String(F("\176"));
 
         _screen.print(defaultFooter);
     }
