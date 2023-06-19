@@ -8,9 +8,9 @@
 // Light Fixture Data
 const uint8_t maxBrightness = 217; // 85% max brightness to increase LED lifetime
 DMXFixture fixtures[] = {DMXFixture(1, maxBrightness), DMXFixture(7, maxBrightness), DMXFixture(13, maxBrightness), DMXFixture(19, maxBrightness)};                                       // configured fixtures and their start channels. The maximum amount of supported fixtures is 16.
-const FixtureProfile defaultColorSet[] = {FixtureProfile(0xFF0000, 0x00000FF), FixtureProfile(0x0000FF, 0xFF00000), FixtureProfile(0xFF0000, 0x00000FF), FixtureProfile(0x00FF00, 0x0039000)}; // profiles that fixtures can assume. Each profile consists of a hex code for color and a hex code for frequencies the fixture should respond to.
-const FixtureProfile warmColorSet[] = {FixtureProfile(0xFF0000, 0x00000FF), FixtureProfile(0xBE4100, 0xFF00000), FixtureProfile(0xFF0000, 0x00000FF), FixtureProfile(0xD22D00, 0x0039000)};
-const FixtureProfile coldColorSet[] = {FixtureProfile(0x4B00B4, 0x00000FF), FixtureProfile(0x008080, 0xFF00000), FixtureProfile(0x4B00B4, 0x00000FF), FixtureProfile(0x464673, 0x0039000)};
+const FixtureProfile rgbColorSet[] = {FixtureProfile(0xFF0000, 0x00000FF), FixtureProfile(0x0000FF, 0x0039000), FixtureProfile(0xFF0000, 0x00000FF), FixtureProfile(0x00FF00, 0xFF00000)}; // profiles that fixtures can assume. Each profile consists of a hex code for color and a hex code for frequencies the fixture should respond to.
+const FixtureProfile cmyColorSet[] = {FixtureProfile(0x800080, 0x00000FF), FixtureProfile(0xA06000, 0xFF00000), FixtureProfile(0x800080, 0x00000FF), FixtureProfile(0x008080, 0x0039000)};
+const FixtureProfile coldColorSet[] = {FixtureProfile(0x4B00B4, 0x00000FF), FixtureProfile(0x0000FF, 0xFF00000), FixtureProfile(0x4B00B4, 0x00000FF), FixtureProfile(0x464673, 0x0039000)};
 const FixtureProfile uwuColorSet[] = {FixtureProfile(0xFF0000, 0x00000FF), FixtureProfile(0x71008E, 0xFF00000), FixtureProfile(0xFF0000, 0x00000FF), FixtureProfile(0xAA0055, 0x0039000)};
 const uint8_t targetFrameTimeMs = 66;
 // MSGEQ7 Signal Data
@@ -21,8 +21,8 @@ const uint8_t delayBetweenSamples = 1; // time in ms to wait between samples in 
 // ===== GLOBAL VARIABLES ======
 // Fixture Management
 const uint8_t fixtureAmount = sizeof(fixtures) / sizeof(DMXFixture);
-const uint8_t profileAmount = sizeof(defaultColorSet) / sizeof(FixtureProfile);
-const FixtureProfile *const profiles[] = {defaultColorSet, warmColorSet, coldColorSet, uwuColorSet};//, warmColorSet, coldColorSet, uwuColorSet};
+const uint8_t profileAmount = sizeof(rgbColorSet) / sizeof(FixtureProfile);
+const FixtureProfile *const profiles[] = {rgbColorSet, cmyColorSet, coldColorSet, uwuColorSet};// rgbColorSet, cmyColorSet, coldColorSet, uwuColorSet};
 // Automatic Profile Cycling
 uint32_t lastPermutatedAtMs;
 uint64_t cachedPermutationCode;
@@ -41,16 +41,9 @@ uint8_t colorSetSetting = 0;
 uint8_t msPerFrameMonitor = 0;
 void toggleStrobe(bool alternateAction)
 {
-    if (strobeEnabled)
-    {
-        strobeEnabled = false;
-    }
-    else
-    {
-        strobeEnabled = true;
-    }   
+    strobeEnabled ^= 1;
 }
-SettingsPage pages[] = {SettingsPageFactory("Lights", &whiteLightSetting).setLinkedVariableLimits(0, 4).setDisplayAlias("  OFF  BARTABLE  ALL").finalize(), SettingsPageFactory("Strobe", &strobeFrequencySetting).setLinkedVariableLimits(0, 101).setLinkedVariableUnits('%').finalize(), SettingsPageFactory("Gain", &gainModeSetting).setLinkedVariableLimits(0, 3).setDisplayAlias(" AUTO  LOW HIGH").enableChangePreviews().finalize(), SettingsPageFactory("Colors", &colorSetSetting).setLinkedVariableLimits(0, 4).setDisplayAlias("  RGB WARM COLD  uwu").enableChangePreviews().finalize(), SettingsPageFactory("Frame ms", &msPerFrameMonitor).makeMonitor().finalize()};
+SettingsPage pages[] = {SettingsPageFactory("Lights", &whiteLightSetting).setLinkedVariableLimits(0, 4).setDisplayAlias("  OFF  BARTABLE  ALL").finalize(), SettingsPageFactory("Strobe", &strobeFrequencySetting).setLinkedVariableLimits(0, 101).setLinkedVariableUnits('%').finalize(), SettingsPageFactory("Gain", &gainModeSetting).setLinkedVariableLimits(0, 3).setDisplayAlias(" AUTO  LOW HIGH").enableChangePreviews().finalize(), SettingsPageFactory("Colors", &colorSetSetting).setLinkedVariableLimits(0, 4).setDisplayAlias("  RGB  CMY COLD  uwu").enableChangePreviews().finalize(), SettingsPageFactory("Frame ms", &msPerFrameMonitor).makeMonitor().finalize()};
 SettingsDisplay<5> userInterface(pages);
 LatchedButton<8> plusButton(3, 1000/targetFrameTimeMs);
 LatchedButton<8> selectButton(5, 1000/targetFrameTimeMs);
