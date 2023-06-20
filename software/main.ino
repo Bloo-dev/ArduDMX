@@ -214,7 +214,7 @@ uint16_t transformAudioSignal(uint16_t lowSignalCutOff, float amplificationFacto
             bandClippings[band] = 1023; // remember the signal clipped
         }
 
-        signalAmplified = signalAmplified / 4;
+        signalAmplified = signalAmplified >> 2; // div by 4 via bitshift
         targetArray[band] = (int)min(signalAmplified, 255); // scale to [0..255] for use in light fixtures
     }
 
