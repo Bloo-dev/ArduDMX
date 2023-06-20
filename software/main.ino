@@ -14,7 +14,7 @@ const FixtureProfile coldColorSet[] = {FixtureProfile(0x4B00B4, 0x00000FF), Fixt
 const FixtureProfile uwuColorSet[] = {FixtureProfile(0xFF0000, 0x00000FF), FixtureProfile(0x71008E, 0xFF00000), FixtureProfile(0xFF0000, 0x00000FF), FixtureProfile(0xAA0055, 0x0039000)};
 const uint8_t targetFrameTimeMs = 66;
 // MSGEQ7 Signal Data
-const uint8_t samplesPerRun = 1;//temp changed to 1 to see if results are better, was 16;       // number of consecutive samples to take whenever the audio is sampled (these are then averaged). Higher values inhibit random noise spikes.
+const uint8_t samplesPerRun = 1; // number of consecutive samples to take whenever the audio is sampled (these are then averaged). Higher values inhibit random noise spikes, but average out details.
 const uint8_t delayBetweenSamples = 1; // time in ms to wait between samples in a consecutive sample run. High values will decrease temporal resolution drastically.
 //  =============================
 
@@ -22,7 +22,7 @@ const uint8_t delayBetweenSamples = 1; // time in ms to wait between samples in 
 // Fixture Management
 const uint8_t fixtureAmount = sizeof(fixtures) / sizeof(DMXFixture);
 const uint8_t profileAmount = sizeof(rgbColorSet) / sizeof(FixtureProfile);
-const FixtureProfile *const profiles[] = {rgbColorSet, cmyColorSet, coldColorSet, uwuColorSet};// rgbColorSet, cmyColorSet, coldColorSet, uwuColorSet};
+const FixtureProfile *const profiles[] = {rgbColorSet, cmyColorSet, coldColorSet, uwuColorSet}; // rgbColorSet, cmyColorSet, coldColorSet, uwuColorSet};
 // Automatic Profile Cycling
 uint32_t lastPermutatedAtMs;
 uint64_t cachedPermutationCode;
@@ -50,8 +50,6 @@ LatchedButton<8> selectButton(5, 1000/targetFrameTimeMs);
 LatchedButton<8> minusButton(6, 1000/targetFrameTimeMs);
 LatchedButton<8> functionButton(9, 1000/targetFrameTimeMs);
 // Auto Gain
-NumericHistory<uint16_t,32> amplitudeHistory = NumericHistory<uint16_t,32>();
-NumericHistory<uint16_t,32> clippingHistory = NumericHistory<uint16_t,32>();
 const uint8_t targetDutyCycle = 196;          // target value for fixture cross-frequency duty cycle (time-clipped/time-not-clipped in parts of 1023, e.g. 196=19.2%)
 const float amplificationFactorMax = 64;      // maximum allowed amplifaction factor
 const float amplificationFactorMin = 0.015625; // minimal allowed amplification factor
@@ -171,6 +169,48 @@ void loop()
     msPerFrameMonitor = (uint8_t)(millis() - frameStartTime);
     int16_t remainingFrameTimeMs = targetFrameTimeMs - msPerFrameMonitor;
     delay(max(remainingFrameTimeMs, 0));
+}
+
+/**
+ * @brief Calculates the temporal mean value of an audio signal, with the noise level removed.
+ * 
+ * @param bandAmplitudes The amplitudes of the 7 frequency bands provided by the MSGEQ7 chip.
+ * @param noiseLevel A base noise level to be subtracted from the supplied bandAmplitudes before processing.
+ * @return uint16_t The temporal mean of the cross-band signal amplitude.
+ */
+uint16_t calculateSignalMean(uint16_t *bandAmplitudes, uint16_t noiseLevel)
+{
+    static NumericHistory<uint16_t,32> amplitudeHistory = NumericHistory<uint16_t,32>();
+
+    int32_t crossBandSignal = getAverage(bandAmplitudes, 7, 0) - noiseLevel;
+    amplitudeHistory.update(max(crossBandSignal, 0));
+
+    return getAverage(amplitudeHistory.get(), amplitudeHistory.length(), 0);
+}
+
+uint16_t mapAudioAmplitudeToLightLevel(uint16_t *bandAmplitudes, uint16_t )
+{
+    // TODO
+}
+
+void updateAmplificationFactor(float &amplificationFactor, uint16_t crossBandClipping, uint16_t targetCrossBandClipping)
+{
+    static NumericHistory<uint16_t,32> clippingHistory = NumericHistory<uint16_t,32>();
+
+    clippingHistory.update(crossBandClipping);
+    if (gainModeSetting == 0)
+    {
+        float clippingDeviation = ((float) targetCrossBandClipping) / ((float) getAverage(clippingHistory.get(), clippingHistory.length(), 0));
+        amplificationFactor = constrain(clippingDeviation, amplificationFactorMin, amplificationFactorMax);
+    }
+    else if (gainModeSetting == 1)
+    {
+        amplificationFactor = 0.5;
+    }
+    else if (gainModeSetting == 2)
+    {
+        amplificationFactor = 48;
+    }
 }
 
 /**
