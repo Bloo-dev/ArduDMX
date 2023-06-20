@@ -50,6 +50,9 @@ LatchedButton<8> selectButton(5, 1000/targetFrameTimeMs);
 LatchedButton<8> minusButton(6, 1000/targetFrameTimeMs);
 LatchedButton<8> functionButton(9, 1000/targetFrameTimeMs);
 // Auto Gain
+const uint8_t targetCrossBandClipping = 196;           // target value for fixture cross-frequency duty cycle (time-clipped/time-not-clipped in parts of 1023, e.g. 196=19.2%)
+const float amplificationFactorMax = 64;       // maximum allowed amplifaction factor
+const float amplificationFactorMin = 0.015625; // minimal allowed amplification factor
 float amplificationFactor = 12.0;             // amplification for signals considered non-noise (ones that should result in a non-zero light response), managed automatically
 uint16_t noiseLevel = 0;                      // lower bound for noise, determined automatically at startup
 // =============================
@@ -183,7 +186,7 @@ uint16_t mapAudioAmplitudeToLightLevel(uint16_t *bandAmplitudes, uint16_t bandAv
     uint16_t bandClippings[] = {0, 0, 0, 0, 0, 0, 0};
     for (uint8_t band = 0; band < 7; band++)
     {
-        int32_t halfSignalWidth = bandAmplitudes[band] - bandAverage; // calculate average absolute value of this band
+        int32_t halfSignalWidth = (int32_t) bandAmplitudes[band] - bandAverage; // calculate average absolute value of this band
         uint16_t signalAmplified = max(halfSignalWidth, 0) * amplificationFactor; // amplify parts of the signal that are larger than the supplied bandAverage
         if (signalAmplified >= 1023)
         {
@@ -215,8 +218,8 @@ void updateAmplificationFactor(float &amplificationFactor, uint16_t crossBandCli
     clippingHistory.update(crossBandClipping);
     if (gainModeSetting == 0)
     {
-        float clippingDeviation = 196.0 / ((float) getAverage(clippingHistory.get(), clippingHistory.length(), 0)); // target ('wanted') value for the cross-band clipping is 196.0 = 19.1%
-        amplificationFactor = constrain(clippingDeviation, 0.015625, 64.0); // limit the amplification factor to be within this range
+        float clippingDeviation = targetCrossBandClipping / ((float) getAverage(clippingHistory.get(), clippingHistory.length(), 0)); // target ('wanted') value for the cross-band clipping is 196.0 = 19.1%
+        amplificationFactor = constrain(clippingDeviation, amplificationFactorMin, amplificationFactorMax); // limit the amplification factor to be within this range
     }
     else if (gainModeSetting == 1)
     {
