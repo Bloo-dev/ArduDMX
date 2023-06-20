@@ -22,7 +22,7 @@ const uint8_t delayBetweenSamples = 1; // time in ms to wait between samples in 
 // Fixture Management
 const uint8_t fixtureAmount = sizeof(fixtures) / sizeof(DMXFixture);
 const uint8_t profileAmount = sizeof(rgbColorSet) / sizeof(FixtureProfile);
-const FixtureProfile *const profiles[] = {rgbColorSet, cmyColorSet, coldColorSet, uwuColorSet}; // rgbColorSet, cmyColorSet, coldColorSet, uwuColorSet};
+const FixtureProfile *const profiles[] = {rgbColorSet, cmyColorSet, coldColorSet, uwuColorSet};
 // Automatic Profile Cycling
 uint32_t lastPermutatedAtMs;
 uint64_t cachedPermutationCode;
