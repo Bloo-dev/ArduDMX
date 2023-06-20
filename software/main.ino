@@ -50,9 +50,6 @@ LatchedButton<8> selectButton(5, 1000/targetFrameTimeMs);
 LatchedButton<8> minusButton(6, 1000/targetFrameTimeMs);
 LatchedButton<8> functionButton(9, 1000/targetFrameTimeMs);
 // Auto Gain
-const uint8_t targetDutyCycle = 196;          // target value for fixture cross-frequency duty cycle (time-clipped/time-not-clipped in parts of 1023, e.g. 196=19.2%)
-const float amplificationFactorMax = 64;      // maximum allowed amplifaction factor
-const float amplificationFactorMin = 0.015625; // minimal allowed amplification factor
 float amplificationFactor = 12.0;             // amplification for signals considered non-noise (ones that should result in a non-zero light response), managed automatically
 uint16_t noiseLevel = 0;                      // lower bound for noise, determined automatically at startup
 // =============================
@@ -103,28 +100,10 @@ void loop()
     // Get FFT data from MSGEQ7 chip
     sampleMSGEQ7(samplesPerRun, delayBetweenSamples, frequencyAmplitudes);
 
-    // Store history of average signal across all bands (with background noise already subtracted) // TODO move these calculations into a function to free local variable memory space from temp variables
-    uint16_t averageAmplitudeNoNoise = max((int32_t)getAverage(frequencyAmplitudes, 7, 0) - noiseLevel, 0);
-    amplitudeHistory.update(averageAmplitudeNoNoise);
-    uint16_t signalMean = getAverage(amplitudeHistory.get(), amplitudeHistory.length(), 0);
-
-    // Store history of duty cycle and transform values in frequencyAmplitudes into range [0..255]
-    clippingHistory.update(transformAudioSignal(noiseLevel + signalMean, amplificationFactor, frequencyAmplitudes));
-
-    if (gainModeSetting == 0)
-    {
-        // Get new amplification factor based on duty cycle mean (duty cycle of 196 is about 19.1%)
-        uint16_t dutyCycleMean = getAverage(clippingHistory.get(), clippingHistory.length(), 0);
-        float dutyCycleDeviance = (float)targetDutyCycle / dutyCycleMean;
-        amplificationFactor = constrain(dutyCycleDeviance, amplificationFactorMin, amplificationFactorMax);
-    }
-    else if (gainModeSetting == 1)
-    {
-        amplificationFactor = 0.5; // manual gain setting "low"
-    } else if (gainModeSetting == 2)
-    {
-        amplificationFactor = 48; // manual gain setting "high"
-    }
+    // Transform audio signal levels to light signal levels and apply amplification
+    uint16_t signalMean = calculateSignalMean(frequencyAmplitudes, noiseLevel);
+    uint16_t crossBandClipping = mapAudioAmplitudeToLightLevel(frequencyAmplitudes, signalMean + noiseLevel, amplificationFactor);
+    updateAmplificationFactor(amplificationFactor, crossBandClipping);
 
     // Select and Cycle Fixture Profiles
     FixtureProfile permutatedProfiles[fixtureAmount];
@@ -141,7 +120,7 @@ void loop()
         fixtures[fixtureId].display(dmxMaster);
     }
 
-    // user interface keep alive
+    // Send Button inputs to UI and update UI accordingly
     if (plusButton.isPressed())
     {
         userInterface.input(3, false);
@@ -188,20 +167,56 @@ uint16_t calculateSignalMean(uint16_t *bandAmplitudes, uint16_t noiseLevel)
     return getAverage(amplitudeHistory.get(), amplitudeHistory.length(), 0);
 }
 
-uint16_t mapAudioAmplitudeToLightLevel(uint16_t *bandAmplitudes, uint16_t )
+/**
+ * @brief Transforms a supplied array of 12-bit band amplitude values to an array of 8-bit band amplitude values which can then be used to address DMX channels.
+ *
+ * @param bandAmplitudes An array of 12-bit band amplitudes provided by the MSGEQ7 chip. This array will be modified in-place.
+ * @param bandAverage The average absolute value to be expected across all bands. All band amplitudes which are less than this value will be set to `0` in the output.
+ * @param amplificationFactor The amplification factor to be applied to the signal.
+ * 
+ * @return [0..1023] The average of the cross-band clipping. This is calculated as follows:
+ * Each band which is detected to be clipping (i.e. has a value of `1023` or larger after the amplification factor was applied) is assigned the value `1023`,
+ * each band which is not clipping is assigned a value of `0` in a temporary array. The average of this array is what is returned.
+ */
+uint16_t mapAudioAmplitudeToLightLevel(uint16_t *bandAmplitudes, uint16_t bandAverage, float &amplificationFactor)
 {
-    // TODO
+    uint16_t bandClippings[] = {0, 0, 0, 0, 0, 0, 0};
+    for (uint8_t band = 0; band < 7; band++)
+    {
+        int32_t halfSignalWidth = bandAmplitudes[band] - bandAverage; // calculate average absolute value of this band
+        uint16_t signalAmplified = max(halfSignalWidth, 0) * amplificationFactor; // amplify parts of the signal that are larger than the supplied bandAverage
+        if (signalAmplified >= 1023)
+        {
+            bandClippings[band] = 1023; // remember the signal clipped
+        }
+
+        signalAmplified = signalAmplified >> 2; // divide by 4 via shifting by 2
+        bandAmplitudes[band] = (int)min(signalAmplified, 255); // scale to [0..255] for use in light fixtures
+    }
+
+    return getAverage(bandClippings, 7, 0); // return average cross-band clipping
 }
 
-void updateAmplificationFactor(float &amplificationFactor, uint16_t crossBandClipping, uint16_t targetCrossBandClipping)
+/**
+ * @brief Updates the amplification factor according to the `gainModeSetting` (global variable).
+ * 
+ * @param amplificationFactor The amplification factor to be updated.
+ * If `gainModeSetting` is `1`, it will always be set to `0.5`.
+ * If `gainModeSetting` is `2`, it will always be set to `48`.
+ * If `gainModeSetting` is `0`, it will be dynamically calculated from the latest clipping history.
+ * @param crossBandClipping The latest cross-band clipping average,
+ * aka the average created when every band that has clipped is assigned 1023, and every band that has not clipped is assigned 0.
+ * @param targetCrossBandClipping The desired target value for `crossBandClipping`.
+ */
+void updateAmplificationFactor(float &amplificationFactor, uint16_t crossBandClipping)
 {
     static NumericHistory<uint16_t,32> clippingHistory = NumericHistory<uint16_t,32>();
 
     clippingHistory.update(crossBandClipping);
     if (gainModeSetting == 0)
     {
-        float clippingDeviation = ((float) targetCrossBandClipping) / ((float) getAverage(clippingHistory.get(), clippingHistory.length(), 0));
-        amplificationFactor = constrain(clippingDeviation, amplificationFactorMin, amplificationFactorMax);
+        float clippingDeviation = 196.0 / ((float) getAverage(clippingHistory.get(), clippingHistory.length(), 0)); // target ('wanted') value for the cross-band clipping is 196.0 = 19.1%
+        amplificationFactor = constrain(clippingDeviation, 0.015625, 64.0); // limit the amplification factor to be within this range
     }
     else if (gainModeSetting == 1)
     {
@@ -209,7 +224,7 @@ void updateAmplificationFactor(float &amplificationFactor, uint16_t crossBandCli
     }
     else if (gainModeSetting == 2)
     {
-        amplificationFactor = 48;
+        amplificationFactor = 48.0;
     }
 }
 
@@ -231,34 +246,6 @@ uint16_t getAverage(int *array, uint16_t elements, uint16_t buffer)
 
     sum = buffer + (sum / elements);
     return min(sum, 1023);
-}
-
-/**
- * @brief Transforms a given 12-bit audio signal to an 8-bit signal that can be used to control DMXFixtures. Also performs some cleanup on the signal, like removing noise and scaling the signal to use the entire 8-bit space.
- *
- * @param lowSignalCutOff [0..1023] Signals lower or equal than this will be forced to 0. Applied before amplification.
- * @param amplificationFactor [0.0..10.0] (recommended) Multiplicative amplification factor to be applied to the signal.
- * @param targetArray The array holding the audio data to be modified. Should have seven (7) entries.
- *
- * @return [0..1023] The duty cycle of the average over all frequency bands in terms of clipping, i.e. how often the signal clipped the upper signal limit of 1023/255.
- */
-uint16_t transformAudioSignal(uint16_t lowSignalCutOff, float amplificationFactor, int *targetArray)
-{
-    uint16_t bandClippings[] = {0, 0, 0, 0, 0, 0, 0};
-    for (uint8_t band = 0; band < 7; band++)
-    {
-        uint16_t signalNoNoise = max((int32_t)targetArray[band] - lowSignalCutOff, 0);
-        uint16_t signalAmplified = amplificationFactor * signalNoNoise; // shift signal down, removing noise and static parts of the signal
-        if (signalAmplified >= 1023)
-        {
-            bandClippings[band] = 1023; // remember the signal clipped
-        }
-
-        signalAmplified = signalAmplified / 4;
-        targetArray[band] = (int)min(signalAmplified, 255); // scale to [0..255] for use in light fixtures
-    }
-
-    return getAverage(bandClippings, 7, 0);
 }
 
 /**
