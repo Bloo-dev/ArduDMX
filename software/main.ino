@@ -192,7 +192,7 @@ uint16_t mapAudioAmplitudeToLightLevel(uint16_t *bandAmplitudes, uint16_t bandAv
         {
             bandClippings[band] = 1023; // remember the signal clipped
         }
-
+      
         signalAmplified = signalAmplified >> 2; // divide by 4 via shifting by 2
         bandAmplitudes[band] = (int)min(signalAmplified, 255); // scale to [0..255] for use in light fixtures
     }
