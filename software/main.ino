@@ -50,8 +50,8 @@ LatchedButton<8> selectButton(5, 1000/targetFrameTimeMs);
 LatchedButton<8> minusButton(6, 1000/targetFrameTimeMs);
 LatchedButton<8> functionButton(9, 1000/targetFrameTimeMs);
 // Auto Gain
-const uint8_t targetCrossBandClipping = 196;           // target value for fixture cross-frequency duty cycle (time-clipped/time-not-clipped in parts of 1023, e.g. 196=19.2%)
-const float amplificationFactorMax = 64;       // maximum allowed amplifaction factor
+const float targetCrossBandClipping = 196.0;           // target value for fixture cross-frequency duty cycle (time-clipped/time-not-clipped in parts of 1023, e.g. 196=19.2%)
+const float amplificationFactorMax = 64.0;       // maximum allowed amplifaction factor
 const float amplificationFactorMin = 1e-6; // minimal allowed amplification factor (1/1024)
 float amplificationFactor = 12.0;             // amplification for signals considered non-noise (ones that should result in a non-zero light response), managed automatically
 uint16_t noiseLevel = 0;                      // lower bound for noise, determined automatically at startup
