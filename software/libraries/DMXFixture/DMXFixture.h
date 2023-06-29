@@ -19,12 +19,12 @@
 class DMXFixture
 {
 public:
-    static const uint8_t localDimmerChannel = 1;
-    static const uint8_t localRedChannel = 2;
-    static const uint8_t localGreenChannel = 3;
-    static const uint8_t localBlueChannel = 4;
-    static const uint8_t localWhiteChannel = 5;
-    static const uint8_t localStrobeChannel = 6;
+    static const uint8_t localDimmerChannel = 0;
+    static const uint8_t localRedChannel = 1;
+    static const uint8_t localGreenChannel = 2;
+    static const uint8_t localBlueChannel = 3;
+    static const uint8_t localWhiteChannel = 4;
+    static const uint8_t localStrobeChannel = 5;
     static const uint8_t channelAmount = 6;
 
     /**
