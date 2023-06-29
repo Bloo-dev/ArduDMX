@@ -1,7 +1,7 @@
 #include <Conceptinetics.h>
 #include "DMXFixture.h"
 
-DMXFixture::DMXFixture(uint8_t startChannel, uint8_t dimmerDefaultValue) : _redChannel(startChannel + localRedChannel - 1), _greenChannel(startChannel + localGreenChannel - 1), _blueChannel(startChannel + localBlueChannel - 1), _whiteChannel(startChannel + localWhiteChannel - 1), _dimmerChannel(startChannel + localDimmerChannel - 1), _strobeChannel(startChannel + localStrobeChannel - 1), _dimmerDefaultValue(dimmerDefaultValue)
+DMXFixture::DMXFixture(uint8_t startChannel, uint8_t dimmerDefaultValue) : _startChannel(startChannel), _dimmerDefaultValue(dimmerDefaultValue)
 {
 }
 
@@ -45,12 +45,12 @@ void DMXFixture::reset()
 
 void DMXFixture::display(DMX_Master &dmxController)
 {
-    dmxController.setChannelValue(_dimmerChannel, _dimmerValue);
-    dmxController.setChannelValue(_redChannel, (uint8_t) (_redValue * ((float)_rgbDimmerValue / 255.0)));
-    dmxController.setChannelValue(_greenChannel,(uint8_t) (_greenValue * ((float)_rgbDimmerValue / 255.0)));
-    dmxController.setChannelValue(_blueChannel, (uint8_t) (_blueValue * ((float)_rgbDimmerValue / 255.0)));
-    dmxController.setChannelValue(_whiteChannel, _whiteValue);
-    dmxController.setChannelValue(_strobeChannel, _strobeValue);
+    dmxController.setChannelValue(_startChannel + localDimmerChannel, _dimmerValue);
+    dmxController.setChannelValue(_startChannel + localRedChannel, (uint8_t) (_redValue * ((float)_rgbDimmerValue / 255.0)));
+    dmxController.setChannelValue(_startChannel + localGreenChannel, (uint8_t) (_greenValue * ((float)_rgbDimmerValue / 255.0)));
+    dmxController.setChannelValue(_startChannel + localBlueChannel, (uint8_t) (_blueValue * ((float)_rgbDimmerValue / 255.0)));
+    dmxController.setChannelValue(_startChannel + localWhiteChannel, _whiteValue);
+    dmxController.setChannelValue(_startChannel + localStrobeChannel, _strobeValue);
 }
 
 

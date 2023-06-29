@@ -7,17 +7,17 @@
 // ================================================================
 //                           CONSTANTS
 // ================================================================
-const uint8_t BRIGHTNESS_CAP = 217; // 85% max brightness to increase LED lifetime
-const uint16_t PROFILE_CYCLE_PERIOD_MS = 5000;
-const uint8_t FRAME_PERIOD_MS = 66;
-const uint8_t SAMPLES_PER_FRAME = 1;
-const uint8_t SAMPLE_DELAY_MS = 1;
-const uint8_t AUDIO_BANDS = 7;
-const uint16_t AUDIO_BAND_MAX = 1023;
-const uint8_t DMX_CHANNEL_MAX = 255;
-const float TARGET_CLIPPING = 196.0;    // target value for fixture cross-frequency duty cycle (time-clipped/time-not-clipped in parts of 1023, e.g. 196=19.2%)
-const float AMP_FACTOR_MAX = 64.0;      // maximum allowed amplifaction factor
-const float AMP_FACTOR_MIN = 0.0078125; // minimal allowed amplification factor (1/128)
+const uint8_t BRIGHTNESS_CAP = 217;            // 85% max brightness to increase LED lifetime
+const uint16_t PROFILE_CYCLE_PERIOD_MS = 5000; // amount of milliseconds until the profile assignments between lamps is rotated.
+const uint8_t FRAME_PERIOD_MS = 66;            // target value for the duration of a single frame. If the frame takes less then this, the processor will wait before moving on to the next frame.
+const uint8_t SAMPLES_PER_FRAME = 1;           // amount of consecutive samples to take within one frame. Higher values pratically act as a low-pass filter
+const uint8_t SAMPLE_DELAY_MS = 1;             // time delay between consecutive samples
+const uint8_t AUDIO_BANDS = 7;                 // amount of audio bands provided by the FFT chip. The MSGEQ7 provides 7 bands.
+const uint16_t AUDIO_BAND_MAX = 1023;          // maximum value to expect from the analoge audio signal 1023 = 10-bit ADC
+const uint8_t DMX_CHANNEL_MAX = 255;           // maximum value allowed on a DMX channel. The DMX spec defines this as 255.
+const float TARGET_CLIPPING = 196.0;           // target value for fixture cross-frequency duty cycle (time-clipped/time-not-clipped in parts of 1023, e.g. 196=19.2%)
+const float AMP_FACTOR_MAX = 64.0;             // maximum allowed amplifaction factor
+const float AMP_FACTOR_MIN = 0.0078125;        // minimal allowed amplification factor (1/128)
 
 // ================================================================
 //                         CONFIGURATION
@@ -64,7 +64,7 @@ void setup()
     // Start LCD
     userInterface.setQuickSettingFunction(toggleStrobe);
     userInterface.initializeDisplay(0x27);
-    userInterface.print(F("   Phosphoros   "), F(" ver 2023-06-28 "));
+    userInterface.print(F("   Phosphoros   "), F(" ver 2023-06-29 "));
     delay(1000);
 
     // Start FFT

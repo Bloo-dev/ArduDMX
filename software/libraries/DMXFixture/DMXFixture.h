@@ -90,12 +90,7 @@ public:
     void display(DMX_Master &dmxController);
 
 private:
-    uint8_t _redChannel;
-    uint8_t _greenChannel;
-    uint8_t _blueChannel;
-    uint8_t _whiteChannel;
-    uint8_t _dimmerChannel;
-    uint8_t _strobeChannel;
+    uint8_t _startChannel;
     uint8_t _dimmerDefaultValue;
     uint8_t _dimmerValue;
     uint8_t _rgbDimmerValue;
