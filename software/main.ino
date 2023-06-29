@@ -64,7 +64,7 @@ void setup()
     // Start LCD
     userInterface.setQuickSettingFunction(toggleStrobe);
     userInterface.initializeDisplay(0x27);
-    userInterface.print(F("    arduDMX     "), F(" ver 2023-06-28 "));
+    userInterface.print(F("   Phosphoros   "), F(" ver 2023-06-28 "));
     delay(1000);
 
     // Start FFT
