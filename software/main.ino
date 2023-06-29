@@ -365,16 +365,25 @@ void setFixtureBrightness(DMXFixture &targetFixture, int *audioAmplitudes, uint3
     uint8_t observedBands = 0;
     for (uint8_t band = 0; band < AUDIO_BANDS; band++)
     {
-        uint8_t bandResponse = ((audioResponse & ((uint32_t)0xF << (band * 4))) >> (band * 4));
+        uint8_t bandResponse = ((audioResponse & ((uint32_t)0xF << (band * 4))) >> (band * 4)); // get response coefficient (is between 0.0 .. 15.0)
         if (bandResponse > 0)
         {
-            brightness += (bandResponse / 16.0) * audioAmplitudes[band];
+            brightness += ((float)bandResponse / 15.0) * audioAmplitudes[band]; // calculate brightness value via scaling the band amplitude by the response coefficient
             observedBands++;
         }
     }
-    targetFixture.setRGBDimmer((uint8_t)(brightness / observedBands));
+    targetFixture.setRGBDimmer((uint8_t)(brightness / observedBands)); // set RGB dimmer to a normalized value
 }
 
+/**
+ * @brief Sets the white value of a single fixture according to the supplied whiteSetting and strobeEnabled.
+ *
+ * @param targetFixture The fixture object to be acted upon.
+ * @param fixtureId The id of the currently targeted fixture. Used to allow for physical-location-based whiteSettings.
+ * @param strobeEnabled Whether the strobe should be enabled.
+ * @param strobeFrequency The frequency of the strobe, between 1 and 100 (inclusive)
+ * @param whiteSetting Which whiteSetting to follow. This specifies which fixtures should have their white channels set to a non-zero value.
+ */
 void setFixtureWhite(DMXFixture &targetFixture, uint8_t fixtureId, bool strobeEnabled, uint8_t strobeFrequency, uint8_t whiteSetting)
 {
     // reset white value to 0
