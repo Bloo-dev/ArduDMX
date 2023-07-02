@@ -7,7 +7,6 @@ Phosphoros is mainly designed for the home environment, and consists of two main
 
 Phosphoros hardware is designed to be attached to an Arduino Uno like any other shield, allowing wide compatibility with Arduino Uno revisions.
 
-**THIS PROJECT IS STILL IN A PRE-RELEASE STATE. USAGE IS ONLY RECOMMENDED FROM VERSION 1.0 (not released yet) ONWARDS.**
-
 ## Documentation
+Documentation is still being worked on and not complete yet. Check back later!
 For external documentation regarding the Phosphoros software package, refer to the wiki. Instructions on how to assamble the hardware, hardware design considerations, and usage guidelines can also be found there.
