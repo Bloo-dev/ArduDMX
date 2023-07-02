@@ -1,4 +1,4 @@
-#include <AudioAnalyzer.h>
+#include <MSGEQ7.h>
 #include <DMXFixture.h>
 #include <NumericHistory.h>
 #include <LatchedButton.h>
@@ -10,8 +10,6 @@
 const uint8_t BRIGHTNESS_CAP = 217;            // 85% max brightness to increase LED lifetime
 const uint16_t PROFILE_CYCLE_PERIOD_MS = 5000; // amount of milliseconds until the profile assignments between lamps is rotated.
 const uint8_t FRAME_PERIOD_MS = 66;            // target value for the duration of a single frame. If the frame takes less then this, the processor will wait before moving on to the next frame.
-const uint8_t SAMPLES_PER_FRAME = 1;           // amount of consecutive samples to take within one frame. Higher values pratically act as a low-pass filter
-const uint8_t SAMPLE_DELAY_MS = 1;             // time delay between consecutive samples
 const uint8_t AUDIO_BANDS = 7;                 // amount of audio bands provided by the FFT chip. The MSGEQ7 provides 7 bands.
 const uint16_t AUDIO_BAND_MAX = 1023;          // maximum value to expect from the analoge audio signal 1023 = 10-bit ADC
 const uint8_t DMX_CHANNEL_MAX = 255;           // maximum value allowed on a DMX channel. The DMX spec defines this as 255.
@@ -46,7 +44,7 @@ const SettingsPage SETTINGS_PAGES[] = {SettingsPageFactory("Lights", &whiteLight
 //                           SUBSYSTEMS
 // ================================================================
 DMX_Master dmxMaster(FIXTURES[0].channelAmount *FIXTURE_AMOUNT, 2);
-Analyzer MSGEQ7(7, 4, 0);
+MSGEQ7 MSGEQ7(7, 4, 0);
 uint16_t bandAmplitudes[AUDIO_BANDS];
 float amplificationFactor = 12.0; // amplification for signals considered non-noise (ones that should result in a non-zero light response), managed automatically
 uint16_t noiseLevel = 0;          // lower bound for noise, determined automatically at startup
@@ -64,12 +62,12 @@ void setup()
     // Start LCD
     userInterface.setQuickSettingFunction(toggleStrobe);
     userInterface.initializeDisplay(0x27);
-    userInterface.print(F("   Phosphoros   "), F(" ver 2023-06-29 "));
+    userInterface.print(F("   Phosphoros   "), F(" ver 2023-07-02 "));
     delay(1000);
 
     // Start FFT
     userInterface.print(F("    Starting    "), F("Audio Analyzer.."));
-    MSGEQ7.Init();
+    MSGEQ7.init();
 
     // Start DMX
     userInterface.print(F("    Starting    "), F("DMX Controller.."));
@@ -84,8 +82,8 @@ void setup()
 
     // Analyze Noise Levels (THERE MUST NOT BE AUDIO ON THE JACK FOR THIS TO WORK)
     userInterface.print(F("    Probing     "), F("     Noise...    "));
-    int noiseData[] = {0, 0, 0, 0, 0, 0, 0};
-    sampleMSGEQ7(32, 1, noiseData);
+    uint16_t noiseData[] = {0, 0, 0, 0, 0, 0, 0};
+    MSGEQ7.queryBands(noiseData, 32, 1);
     noiseLevel = getAverage(noiseData, AUDIO_BANDS, 12); // average over all frequencies and add some extra buffer
 
     userInterface.print(F("     Setup      "), F("   Complete!    "));
@@ -102,7 +100,7 @@ void loop()
     uint32_t frameStartTime = millis();
 
     // Get FFT data from MSGEQ7 chip
-    sampleMSGEQ7(SAMPLES_PER_FRAME, SAMPLE_DELAY_MS, bandAmplitudes);
+    MSGEQ7.queryBands(bandAmplitudes);
 
     // Transform audio signal levels to light signal levels and apply amplification
     uint16_t signalMean = calculateSignalMean(bandAmplitudes, noiseLevel);
@@ -253,43 +251,6 @@ uint16_t getAverage(int *array, uint16_t elements, uint16_t buffer)
 
     sum = buffer + (sum / elements);
     return min(sum, AUDIO_BAND_MAX);
-}
-
-/**
- * @brief Gets values from all seven bands provided by the MSGEQ7 spectrum analyzer chip and stores the results for all seven bands to the target array.
- *
- * @param sampleAmount [0..63] The amount of samples to be taken. For each band, the samples taken will be summed up and averaged.
- * @param sampleDelay [0..65535] Delay between taking samples. This is added on-top of the run time of a sample capture.
- * @param targetArray The array to store the resulting data to. Should have at least seven elements.
- */
-void sampleMSGEQ7(int8_t sampleAmount, uint16_t sampleDelay, int *targetArray)
-{
-    uint16_t averageAmplitudes[] = {0, 0, 0, 0, 0, 0, 0};
-    for (uint8_t sample_count = 0; sample_count < sampleAmount; sample_count++)
-    {
-        uint16_t sampleAmplitudes[] = {0, 0, 0, 0, 0, 0, 0};
-        MSGEQ7.ReadFreq(sampleAmplitudes); // store amplitudes of frequency bands into array
-                                           // Frequency(Hz):        63  160  400  1K  2.5K  6.25K  16K
-                                           // bandAmplitudes[]: 0    1    2   3     4      5    6
-
-        averageAmplitudes[0] += sampleAmplitudes[0]; // sum up samples
-        averageAmplitudes[1] += sampleAmplitudes[1];
-        averageAmplitudes[2] += sampleAmplitudes[2];
-        averageAmplitudes[3] += sampleAmplitudes[3];
-        averageAmplitudes[4] += sampleAmplitudes[4];
-        averageAmplitudes[5] += sampleAmplitudes[5];
-        averageAmplitudes[6] += sampleAmplitudes[6];
-
-        delay(sampleDelay); // wait before acquisition of next sample
-    }
-
-    targetArray[0] = averageAmplitudes[0] / sampleAmount; // calculate averages and store to target array
-    targetArray[1] = averageAmplitudes[1] / sampleAmount;
-    targetArray[2] = averageAmplitudes[2] / sampleAmount;
-    targetArray[3] = averageAmplitudes[3] / sampleAmount;
-    targetArray[4] = averageAmplitudes[4] / sampleAmount;
-    targetArray[5] = averageAmplitudes[5] / sampleAmount;
-    targetArray[6] = averageAmplitudes[6] / sampleAmount;
 }
 
 /**
