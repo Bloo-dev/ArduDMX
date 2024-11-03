@@ -10,3 +10,6 @@ Phosphoros hardware is designed to be attached to an Arduino Uno like any other 
 ## Documentation
 Documentation is still being worked on and not complete yet. Check back later!
 For external documentation regarding the Phosphoros software package, refer to the wiki. Instructions on how to assamble the hardware, hardware design considerations, and usage guidelines can also be found there.
+
+# Third-Party Libraries
+This project includes third-party libraries, such as the Conceptinetics Arduino DMX library which can be found in `libraries/Conceptinetics`. Third-party libraries are not licensed under MIT but under separate licenses located within the libraries directory.
